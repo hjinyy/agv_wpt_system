@@ -1,0 +1,17 @@
+# Python/cache
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Local archives and temporary files
+*.zip
+*.tar.gz
+*.zst
+*.xz
+*.log
+.DS_Store
+
+# Very large local-only raw event output (> GitHub file limit)
+results_v2/task_level_results.csv

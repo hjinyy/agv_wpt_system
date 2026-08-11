@@ -1,0 +1,3 @@
+metric,mean,ci95
+contention_events,662.56,24.01767860889141
+different_decision_rate,50.07579384087505,0.7074058154673262

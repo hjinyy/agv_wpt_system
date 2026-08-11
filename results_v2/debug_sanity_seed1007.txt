@@ -1,0 +1,5 @@
+C1: contention=0, diff_rate=0.00%, urgent_violation=57.89%, pad_util=55.02%, mean_delay=10.608 min
+C2: contention=386, diff_rate=14.25%, urgent_violation=42.32%, pad_util=68.54%, mean_delay=6.952 min
+C3: contention=587, diff_rate=57.92%, urgent_violation=19.79%, pad_util=62.43%, mean_delay=11.198 min
+C4: contention=578, diff_rate=51.90%, urgent_violation=19.58%, pad_util=62.53%, mean_delay=6.755 min
+C4 feature std: {'one_minus_soc': 0.167627, 'E_next': 0.345889, 'T_idle': 0.075367, 'eta_WPT': 0.241139, 'D': 0.062052}
