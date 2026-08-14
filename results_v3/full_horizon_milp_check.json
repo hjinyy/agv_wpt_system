@@ -1,0 +1,11 @@
+{
+  "mode": "full_horizon_small_check",
+  "operation_hours": 1,
+  "n_agvs": 2,
+  "n_pads": 1,
+  "slots": 60,
+  "n_binary": 120,
+  "status": 0,
+  "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
+  "solve_time_s": 0.001614554988918826
+}

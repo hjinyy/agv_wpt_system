@@ -66,15 +66,19 @@ def generate_common(cfg,seed,challenge=False,distances=None,urgent_ratio=0.2):
     return tasks,init
 
 class V2Sim:
-    def __init__(self,cfg,strategy,seed,tasks,init,label,variable_eta=True):
+    def __init__(self,cfg,strategy,seed,tasks,init,label,variable_eta=True,predicted_eta_mode=None,realized_eta_mode=None):
         self.cfg=deepcopy(cfg); self.strategy=strategy; self.seed=seed; self.tasks=tasks; self.label=label; self.variable_eta=variable_eta
+        # Backward-compatible default: old variable_eta flag controlled both scheduling estimate and realized charging efficiency.
+        self.predicted_eta_mode = predicted_eta_mode or ('variable' if variable_eta else 'fixed')
+        self.realized_eta_mode = realized_eta_mode or ('variable' if variable_eta else 'fixed')
         self.op=self.cfg['operation_hours']*3600; self.agvs=[V2AGV(i+1,float(init[i])) for i in range(self.cfg['n_agvs'])]
         for a in self.agvs: a.record(0)
         self.pads=[V2Pad(i+1) for i in range(self.cfg['n_pads'])]
         self.task_rows=[]; self.feature_rows=[]; self.decision_rows=[]; self.contention_events=0; self.diff_decisions=0; self.deferred=0; self.max_queue=0
         self.weights={k:v/sum(self.cfg['weights'].values()) for k,v in self.cfg['weights'].items()}
-    def eta(self,task,agv):
-        if not self.variable_eta: return self.cfg['eta_base']
+    def eta(self,task,agv,mode=None):
+        mode = mode or self.realized_eta_mode
+        if mode == 'fixed': return self.cfg['eta_base']
         # candidate-specific deterministic offset using task state + AGV ID, known before scheduling.
         vals=eta_values(self.cfg); return float(vals[(task.eta_state+agv.agv_id-1)%len(vals)])
     def consume(self,a,tr,aux,t):
@@ -114,7 +118,7 @@ class V2Sim:
         if self.strategy=='C4':
             scored=[]
             for a in cands:
-                fr=self.features(a,t,next_task,self.eta(next_task,a)); fr.update({'scenario':self.label,'strategy':'C4','replication':self.seed,'agv_id':a.agv_id,'task_id':next_task.task_id})
+                fr=self.features(a,t,next_task,self.eta(next_task,a,mode=self.predicted_eta_mode)); fr.update({'scenario':self.label,'strategy':'C4','replication':self.seed,'agv_id':a.agv_id,'task_id':next_task.task_id})
                 self.feature_rows.append(fr); scored.append((fr['score'],a))
             return [a for _,a in sorted(scored,key=lambda x:(-x[0],x[1].agv_id))[:avail_pads]], 'C4'
         return [], 'none'
@@ -135,7 +139,7 @@ class V2Sim:
                 self.cfg['_expected_contention_wait_s']=self.cfg['opportunity_quantum_s']*max(0,math.ceil(len(cands)/max(1,len(avail)))-1)
                 self.contention_events+=1; self.max_queue=max(self.max_queue,len(cands)-len(avail))
                 c3=sorted(cands,key=lambda a:(a.soc,a.agv_id))[0]
-                scored=[(self.features(a,t,next_task,self.eta(next_task,a))['score'],a) for a in cands]
+                scored=[(self.features(a,t,next_task,self.eta(next_task,a,mode=self.predicted_eta_mode))['score'],a) for a in cands]
                 c4=sorted(scored,key=lambda x:(-x[0],x[1].agv_id))[0][1]
                 diff=int(c3.agv_id!=c4.agv_id); self.diff_decisions+=diff
                 self.decision_rows.append({'scenario':self.label,'strategy':self.strategy,'replication':self.seed,'time_s':t,'candidate_count':len(cands),'available_pads':len(avail),'c3_agv':c3.agv_id,'c4_agv':c4.agv_id,'different':diff})
@@ -144,7 +148,7 @@ class V2Sim:
             chosen,reason=self.choose(cands,t,next_task,len(avail))
             for a,p in zip(chosen,avail):
                 start=max(t,p.available); wait=max(0,p.available-t); a.charge_wait_s+=wait; p.wait_s+=wait
-                ts=self.detour(a,start); eta=self.eta(next_task,a); dur=min(q,max(0,next_arrival-ts))
+                ts=self.detour(a,start); eta=self.eta(next_task,a,mode=self.realized_eta_mode); dur=min(q,max(0,next_arrival-ts))
                 if a.soc<=self.cfg['critical_soc'] and reason=='critical': dur=min(q,max(0,next_arrival-ts))
                 actual,_,_=self.charge_amount(a,p,ts,dur,eta,mandatory=False)
                 a.available=ts+actual; p.available=a.available
@@ -154,7 +158,7 @@ class V2Sim:
         return t
     def mandatory_charge(self,a,t,task):
         p=min(self.pads,key=lambda p:(p.available,p.pad_id)); start=max(t,p.available); wait=max(0,start-t); a.charge_wait_s+=wait; p.wait_s+=wait
-        ts=self.detour(a,start); eta=self.eta(task,a); target=(self.cfg['max_soc']-a.soc)*self.cfg['battery_kwh']; dur=target/(self.cfg['wpt_power_kw']*eta)*3600 if eta>0 else 0
+        ts=self.detour(a,start); eta=self.eta(task,a,mode=self.realized_eta_mode); target=(self.cfg['max_soc']-a.soc)*self.cfg['battery_kwh']; dur=target/(self.cfg['wpt_power_kw']*eta)*3600 if eta>0 else 0
         actual,_,_=self.charge_amount(a,p,ts,dur,eta,mandatory=True); a.available=ts+actual; p.available=a.available; return a.available
     def run(self):
         # C1: no opportunity; C2-C4: opportunity in idle gaps before each next task arrival.
