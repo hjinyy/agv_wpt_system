@@ -193,8 +193,63 @@ class V3Sim(V2Sim):
             t = min([next_arrival] + [p.available for p in self.pads] + [a.available for a in self.agvs if a.available > t + 1e-9] or [next_arrival])
         return t
 
+    def mandatory_charge(self, a, t, task):
+        p = min(self.pads, key=lambda p: (p.available, p.pad_id))
+        start = max(t, p.available)
+        wait = max(0, start - t)
+        a.charge_wait_s += wait
+        p.wait_s += wait
+        ts = self.detour(a, start)
+        eta = self.eta(task, a, mode=self.realized_eta_mode)
+        # Official V3 conventional baseline: C1 charges from 30% threshold to 70% target.
+        # Other strategies retain the original safety/mandatory charge-to-max behavior.
+        target_soc = self.cfg.get('c1_target_soc', 0.70) if self.strategy == 'C1' else self.cfg['max_soc']
+        target = max(0.0, (target_soc - a.soc) * self.cfg['battery_kwh'])
+        dur = target / (self.cfg['wpt_power_kw'] * eta) * 3600 if eta > 0 else 0
+        actual, _, _ = self.charge_amount(a, p, ts, dur, eta, mandatory=True)
+        a.available = ts + actual
+        p.available = a.available
+        return a.available
+
+    def run(self):
+        prev = 0.0
+        for idx, task in enumerate(self.tasks):
+            if self.strategy != 'C1':
+                self.schedule_opportunity_until(prev, task.arrival, task)
+            a = min(self.agvs, key=lambda x: (x.available, x.agv_id))
+            start = max(task.arrival, a.available)
+            need = task_energy(self.cfg, task.distance_m) / self.cfg['battery_kwh'] + self.cfg['min_soc']
+            if self.strategy == 'C1':
+                if a.soc <= self.cfg.get('c1_start_soc', 0.30) or a.soc < need:
+                    start = self.mandatory_charge(a, start, task)
+            else:
+                # Apply the same mandatory SOC safety check to C2-C5, including C5.
+                if a.soc <= self.cfg['critical_soc'] or a.soc < need:
+                    start = self.mandatory_charge(a, start, task)
+            delay = start - task.arrival
+            dur = task_time(self.cfg, task.distance_m)
+            tr, aux = move_energy(self.cfg, 2 * task.distance_m, 2 * task.distance_m / self.cfg['agv_speed_mps'])
+            aux += self.cfg.get('p_aux_kw', 0) * (self.cfg['picking_service_s'] + self.cfg['staging_service_s']) / 3600
+            comp = start + dur
+            self.consume(a, tr, aux, comp)
+            a.available = comp
+            a.last_job_end = comp
+            a.completed += 1
+            tard = max(0, comp - task.deadline)
+            met = comp <= task.deadline
+            self.task_rows.append({'task_id': task.task_id, 'arrival_time': task.arrival, 'task_type': task.task_type,
+                                   'picking_point': task.picking_point, 'distance': task.distance_m,
+                                   'assigned_agv': a.agv_id, 'deadline': task.deadline, 'start_time': start,
+                                   'completion_time': comp, 'delay': delay / 60, 'tardiness': tard / 60,
+                                   'deadline_met': met, 'strategy': self.strategy, 'replication': self.seed,
+                                   'scenario': self.label})
+            prev = task.arrival
+        return self.metrics()
+
     def metrics(self):
         m = super().metrics()
+        m['c1_start_soc'] = self.cfg.get('c1_start_soc', 0.30) if self.strategy == 'C1' else np.nan
+        m['c1_target_soc'] = self.cfg.get('c1_target_soc', 0.70) if self.strategy == 'C1' else np.nan
         if self.strategy == 'C5':
             m['solver_computation_time_s'] = self.c5_solver_time_s
             m['solver_calls'] = self.c5_solver_calls

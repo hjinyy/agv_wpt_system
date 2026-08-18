@@ -4,12 +4,13 @@
 
 ## 현재 main 버전
 
-**V3 — C4 next-task feature fix + C5 MILP charging benchmark**
+**V3 — revised C1 baseline + C4 next-task feature fix + C5 rolling MILP charging benchmark**
 
 핵심 내용:
 
+- C1 revised baseline: 기존 20%→90% full-charge 대신 SOC≤30%에서 시작해 70%에서 종료하는 conventional threshold charging을 공식 baseline으로 사용합니다.
 - C4 수정: contention 시 모든 AGV가 동일한 `next_task`를 보던 문제를 수정하고, WMS preview 가정하에 AGV별 next assigned task 기반 `E_next_i`, `D_i`를 계산합니다.
-- C5 추가: `scipy.optimize.milp` / HiGHS 기반 rolling MILP charging allocation benchmark를 추가했습니다.
+- C5 추가: `scipy.optimize.milp` / HiGHS 기반 rolling MILP charging allocation benchmark를 추가했습니다. C5에도 C2~C4와 동일한 mandatory SOC safety check를 적용합니다.
 - C1~C5 동일 seed/common random numbers로 비교합니다.
 - 결과는 `results_v3/`에 저장되어 있습니다.
 

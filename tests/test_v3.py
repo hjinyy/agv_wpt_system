@@ -19,6 +19,18 @@ def test_v3_c4_preview_features_have_task_variance():
     assert len(set(round(x, 8) for x in raw_e)) > 1
 
 
+def test_v3_c1_revised_baseline_metadata_is_recorded():
+    cfg = load_cfg()
+    cfg.update({'operation_hours': 0.25, 'n_agvs': 2, 'n_pads': 1, 'task_arrival_rate_per_h': 20})
+    distances = {i: cfg['picking_staging_distance_m'] for i in range(1, cfg['n_picking_points'] + 1)}
+    tasks, init = generate_common(cfg, cfg['seed0'], distances=distances, urgent_ratio=0.0)
+    lookup = {t.task_id: i for i, t in enumerate(tasks)}
+    sim = V3Sim(cfg, 'C1', cfg['seed0'], tasks, init, 'unit_c1', variable_eta=True, task_index_lookup=lookup)
+    out = sim.run()
+    assert out['c1_start_soc'] == 0.30
+    assert out['c1_target_soc'] == 0.70
+
+
 def test_v3_c5_debug_runs_and_records_solver_stats():
     cfg = load_cfg()
     cfg.update({'operation_hours': 0.25, 'n_agvs': 2, 'n_pads': 1, 'task_arrival_rate_per_h': 20})
