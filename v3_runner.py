@@ -82,74 +82,256 @@ class V3Sim(V2Sim):
             return self.choose_c5_milp(cands, t, next_task, avail_pads, preview)
         return [], 'none'
 
+    def _forecast_horizon_tasks(self, cands, t, horizon_s, preview):
+        """Shadow FCFS + first-available forecast for tasks inside [t, t+horizon].
+
+        This does not mutate actual DES state. It approximates future WMS workload for the
+        charging MILP and deliberately keeps task assignment deterministic and identical in
+        rule to C1-C5 actual execution: FCFS + first-available AGV + AGV-ID tie-break.
+        """
+        end_t = t + horizon_s
+        agv_ids = [a.agv_id for a in self.agvs]
+        avail = {a.agv_id: max(a.available, t) for a in self.agvs}
+        rows = []
+        start_idx = self.task_index_lookup.get(next(iter(preview.values())).task_id, 0) if preview else 0
+        for task in self.tasks[start_idx:]:
+            if task.arrival > end_t:
+                break
+            if task.arrival + 1e-9 < t:
+                continue
+            aid = min(agv_ids, key=lambda x: (avail[x], x))
+            start = max(task.arrival, avail[aid])
+            completion = start + task_time(self.cfg, task.distance_m)
+            rows.append({'task': task, 'agv_id': aid, 'pred_start': start, 'pred_completion': completion,
+                         'pred_delay_s': max(0.0, start - task.arrival),
+                         'pred_tardiness_s': max(0.0, completion - task.deadline),
+                         'energy_soc': task_energy(self.cfg, task.distance_m) / self.cfg['battery_kwh']})
+            avail[aid] = completion
+        return rows
+
     def choose_c5_milp(self, cands, t, next_task, avail_pads, preview):
-        # One-slot rolling MILP: assign up to available pads to AGVs. Lexicographic weights are
-        # separated by large constants: SOC safety > urgent deadline risk > delay > WPT loss.
-        n = len(cands); m = max(1, avail_pads); N = n * m
-        if N == 0:
-            return [], 'C5-none'
-        q = self.cfg['opportunity_quantum_s']
-        qh = q / 3600
-        benefits = []
-        meta = []
+        """C5: 15-min rolling-horizon MILP charging benchmark.
+
+        The MILP optimizes charging assignment x[i,p,k] across K future 60-s slots, then
+        executes only the first slot (MPC/receding horizon). Task assignment remains a
+        shadow FCFS + first-available forecast and is not optimized by C5.
+
+        Objective is a normalized weighted approximation when exact DES-coupled
+        lexicographic task scheduling is too large for repeated 24h Monte Carlo runs:
+        SOC safety slack > urgent energy-availability/tardiness proxy > total task
+        delay/energy proxy > WPT loss. The report states this limitation explicitly.
+        """
+        horizon_s = float(self.cfg.get('c5_horizon_s', 900.0))
+        slot_s = float(self.cfg.get('c5_slot_s', 60.0))
+        K = int(round(horizon_s / slot_s))
+        m = max(1, avail_pads)
+        n = len(cands)
+        if n == 0 or m == 0 or K <= 0:
+            return [], 'C5-RH-none'
+
+        pads = list(range(m))
+        cands = sorted(cands, key=lambda a: a.agv_id)
+        idx_agv = {a.agv_id: i for i, a in enumerate(cands)}
+        qh = slot_s / 3600.0
+        horizon_end = t + K * slot_s
+        forecast_tasks = self._forecast_horizon_tasks(cands, t, K * slot_s, preview)
+        T = len(forecast_tasks)
+
+        # Variable blocks
+        nx = n * m * K
+        nsoc = n * (K + 1)
+        nss = n * (K + 1)
+        nts = T  # task energy/schedule slack proxy
+        total = nx + nsoc + nss + nts
+        x0 = 0
+        soc0 = x0 + nx
+        ss0 = soc0 + nsoc
+        ts0 = ss0 + nss
+
+        def xid(i, p, k): return x0 + (i * m + p) * K + k
+        def yids(i, k): return [xid(i, p, k) for p in pads]
+        def socid(i, k): return soc0 + i * (K + 1) + k
+        def ssid(i, k): return ss0 + i * (K + 1) + k
+        def tsid(j): return ts0 + j
+
+        integrality = np.zeros(total)
+        integrality[x0:x0+nx] = 1
+        lb = np.zeros(total)
+        ub = np.full(total, np.inf)
+        ub[x0:x0+nx] = 1
+        # SOC bounds are represented as variable bounds plus slack safety constraints.
+        for i, a in enumerate(cands):
+            for k in range(K + 1):
+                lb[socid(i, k)] = -1.0
+                ub[socid(i, k)] = self.cfg['max_soc']
+        constraints = []
+        lo = []
+        hi = []
+
+        def add(row, l, u):
+            constraints.append(row); lo.append(l); hi.append(u)
+
+        # A. Pad capacity
+        for p in pads:
+            for k in range(K):
+                row = np.zeros(total)
+                for i in range(n): row[xid(i, p, k)] = 1
+                add(row, 0, 1)
+        # B. AGV simultaneous charging capacity
+        for i in range(n):
+            for k in range(K):
+                row = np.zeros(total)
+                for p in pads: row[xid(i, p, k)] = 1
+                add(row, 0, 1)
+        # C. AGV availability based on actual current busy state + shadow task forecast.
+        busy = np.zeros((n, K), dtype=bool)
+        for i, a in enumerate(cands):
+            for k in range(K):
+                s0 = t + k * slot_s; s1 = s0 + slot_s
+                if a.available > s0 + 1e-9:
+                    busy[i, k] = True
+        for ft in forecast_tasks:
+            aid = ft['agv_id']
+            if aid not in idx_agv:
+                continue
+            i = idx_agv[aid]
+            for k in range(K):
+                s0 = t + k * slot_s; s1 = s0 + slot_s
+                if max(s0, ft['pred_start']) < min(s1, ft['pred_completion']) - 1e-9:
+                    busy[i, k] = True
+        for i in range(n):
+            for k in range(K):
+                if busy[i, k]:
+                    row = np.zeros(total)
+                    for p in pads: row[xid(i, p, k)] = 1
+                    add(row, 0, 0)
+
+        # D. SOC dynamics. Predicted task energy is subtracted at the slot containing
+        # shadow predicted task start. Charging uses predicted efficiency.
+        task_energy_by_ik = np.zeros((n, K))
+        task_at_slot = []
+        for j, ft in enumerate(forecast_tasks):
+            aid = ft['agv_id']
+            if aid in idx_agv:
+                k = int(np.floor((ft['pred_start'] - t) / slot_s))
+                k = max(0, min(K - 1, k))
+                i = idx_agv[aid]
+                task_energy_by_ik[i, k] += ft['energy_soc']
+                task_at_slot.append((j, i, k, ft))
+        for i, a in enumerate(cands):
+            row = np.zeros(total); row[socid(i, 0)] = 1
+            add(row, a.soc, a.soc)
+            for k in range(K):
+                row = np.zeros(total)
+                row[socid(i, k + 1)] = 1
+                row[socid(i, k)] = -1
+                nt = preview.get(a.agv_id, next_task)
+                eta = self.eta(nt, a, mode=self.predicted_eta_mode)
+                charge_soc = self.cfg['wpt_power_kw'] * eta * qh / self.cfg['battery_kwh']
+                for p in pads: row[xid(i, p, k)] -= charge_soc
+                add(row, -task_energy_by_ik[i, k], -task_energy_by_ik[i, k])
+        # E/F. Safety lower bound with slack: SOC + s_soc >= min_soc.
+        for i in range(n):
+            for k in range(K + 1):
+                row = np.zeros(total); row[socid(i, k)] = 1; row[ssid(i, k)] = 1
+                add(row, self.cfg['min_soc'], np.inf)
+
+        # Task energy availability slack proxy. If forecast SOC before task start is too low,
+        # slack approximates downstream delay/tardiness pressure required to recover charge.
+        for j, i, k, ft in task_at_slot:
+            row = np.zeros(total)
+            row[tsid(j)] = 1
+            row[socid(i, k)] = 1
+            add(row, self.cfg['min_soc'] + ft['energy_soc'], np.inf)
+
+        A = np.vstack(constraints) if constraints else np.zeros((0, total))
+        lc = LinearConstraint(A, np.array(lo), np.array(hi))
+        bounds = Bounds(lb, ub)
+
+        # Normalized objective. Units are documented in REPORT_V3. No post-hoc tuning is done.
+        c = np.zeros(total)
+        # Safety slack: high but finite because infeasible horizons must not crash the DES.
+        c[ss0:ss0+nss] = 100.0
+        for j, ft in enumerate(forecast_tasks):
+            base = 1.0
+            if ft['task'].task_type == 'urgent':
+                base += 4.0
+            # Existing predicted tardiness/delay amplifies the task slack penalty.
+            base += min(2.0, ft['pred_tardiness_s'] / max(1.0, horizon_s))
+            base += 0.25 * min(2.0, ft['pred_delay_s'] / max(1.0, horizon_s))
+            c[tsid(j)] = base
         for i, a in enumerate(cands):
             nt = preview.get(a.agv_id, next_task)
-            eta = self.eta(nt, a, mode=self.predicted_eta_mode)
-            e_need = task_energy(self.cfg, nt.distance_m)
-            safety = max(0, (self.cfg['min_soc'] + e_need / self.cfg['battery_kwh']) - a.soc)
-            projected = max(t + q, nt.arrival) + task_time(self.cfg, nt.distance_m)
-            urgent_late = max(0, projected - nt.deadline) if nt.task_type == 'urgent' else 0
-            delay = max(0, projected - nt.arrival)
-            loss = self.cfg['wpt_power_kw'] * (1 - eta) * qh
-            benefit = 1e6 * safety + 1e3 * (urgent_late / 60) + 10 * (delay / 60) - loss
-            for p in range(m):
-                benefits.append(benefit)
-                meta.append((a, nt, eta, p))
-        c = -np.array(benefits, dtype=float)  # scipy minimizes
-        constraints = []
-        lb = []
-        ub = []
-        # each AGV at most one pad
-        for i in range(n):
-            row = np.zeros(N); row[i*m:(i+1)*m] = 1
-            constraints.append(row); lb.append(0); ub.append(1)
-        # each pad at most one AGV
-        for p in range(m):
-            row = np.zeros(N)
-            for i in range(n): row[i*m+p] = 1
-            constraints.append(row); lb.append(0); ub.append(1)
-        # at most avail_pads total assignments
-        constraints.append(np.ones(N)); lb.append(0); ub.append(avail_pads)
-        lc = LinearConstraint(np.vstack(constraints), np.array(lb), np.array(ub))
+            for k in range(K):
+                eta = self.eta(nt, a, mode=self.predicted_eta_mode)
+                loss = self.cfg['wpt_power_kw'] * (1 - eta) * qh
+                # Small normalized loss term; service metrics dominate.
+                for p in pads: c[xid(i, p, k)] += 0.02 * loss
+
         tic = time.perf_counter()
+        status = -999; msg = ''; objective = np.nan; gap = np.nan; x = None
+        time_limit_s = float(self.cfg.get('c5_time_limit_s', 5.0))
+        fallback = 0; infeasible = 0; time_limit_hit = 0
         try:
-            res = milp(c=c, integrality=np.ones(N), bounds=Bounds(0, 1), constraints=lc,
-                       options={'time_limit': 2.0, 'mip_rel_gap': 0.0})
+            res = milp(c=c, integrality=integrality, bounds=bounds, constraints=lc,
+                       options={'time_limit': time_limit_s, 'mip_rel_gap': float(self.cfg.get('c5_mip_rel_gap', 0.001))})
             elapsed = time.perf_counter() - tic
-            self.c5_solver_time_s += elapsed; self.c5_solver_calls += 1
-            x = np.rint(res.x if res.x is not None else np.zeros(N)).astype(int)
-            chosen = []
-            for k, val in enumerate(x):
-                if val > 0:
-                    a, nt, eta, p = meta[k]
-                    chosen.append(a)
-                    self.milp_schedule_rows.append({'scenario': self.label, 'replication': self.seed, 'time_s': t,
-                                                    'agv_id': a.agv_id, 'preview_task_id': nt.task_id,
-                                                    'pad_rank': p + 1, 'predicted_eta': eta, 'slot_s': q})
-            self.solver_rows.append({'scenario': self.label, 'replication': self.seed, 'time_s': t,
-                                     'solver': 'scipy.optimize.milp/HiGHS', 'mode': 'rolling_one_slot',
-                                     'status': int(res.status), 'message': str(res.message),
-                                     'objective': float(res.fun) if res.fun is not None else np.nan,
-                                     'n_binary': N, 'solve_time_s': elapsed})
-            return sorted(chosen, key=lambda a: a.agv_id)[:avail_pads], 'C5-MILP'
+            status = int(res.status); msg = str(res.message); objective = float(res.fun) if res.fun is not None else np.nan
+            gap = float(getattr(res, 'mip_gap', np.nan)) if getattr(res, 'mip_gap', None) is not None else np.nan
+            time_limit_hit = int(status == 1)
+            infeasible = int(status == 2)
+            if res.x is not None and status in (0, 1):
+                x = np.rint(res.x[:nx]).astype(int)
+            else:
+                fallback = 1
         except Exception as e:
             elapsed = time.perf_counter() - tic
-            self.c5_solver_time_s += elapsed; self.c5_solver_calls += 1
-            self.solver_rows.append({'scenario': self.label, 'replication': self.seed, 'time_s': t,
-                                     'solver': 'scipy.optimize.milp/HiGHS', 'mode': 'rolling_one_slot',
-                                     'status': -1, 'message': repr(e), 'objective': np.nan,
-                                     'n_binary': N, 'solve_time_s': elapsed})
-            return sorted(cands, key=lambda a: (a.soc, a.agv_id))[:avail_pads], 'C5-fallback'
+            msg = repr(e); fallback = 1
+
+        self.c5_solver_time_s += elapsed; self.c5_solver_calls += 1
+        chosen = []
+        if x is not None:
+            for i, a in enumerate(cands):
+                if any(x[xid(i, p, 0)] > 0 for p in pads):
+                    chosen.append(a)
+            # Record full optimized horizon, but only first slot is executed by DES.
+            for i, a in enumerate(cands):
+                nt = preview.get(a.agv_id, next_task)
+                for p in pads:
+                    for k in range(K):
+                        if x[xid(i, p, k)] > 0:
+                            self.milp_schedule_rows.append({'scenario': self.label, 'replication': self.seed,
+                                                            'time_s': t, 'horizon_start_s': t, 'slot_index': k + 1,
+                                                            'execute_first_slot': int(k == 0), 'agv_id': a.agv_id,
+                                                            'preview_task_id': nt.task_id, 'pad_rank': p + 1,
+                                                            'predicted_eta': self.eta(nt, a, mode=self.predicted_eta_mode),
+                                                            'slot_s': slot_s, 'horizon_s': horizon_s})
+        if x is None:
+            fallback = 1
+            chosen = sorted(cands, key=lambda a: (a.soc, a.agv_id))[:avail_pads]
+        # If the MILP incumbent intentionally selects no AGV in the first slot, execute no
+        # charging. This is a valid first-slot MPC action, not a fallback.
+
+        # Safety slack aggregate from incumbent solution if available.
+        total_safety_slack = np.nan; max_safety_slack = np.nan; task_slack_sum = np.nan
+        if x is not None and 'res' in locals() and res.x is not None:
+            sol = res.x
+            total_safety_slack = float(np.sum(sol[ss0:ss0+nss]))
+            max_safety_slack = float(np.max(sol[ss0:ss0+nss])) if nss else 0.0
+            task_slack_sum = float(np.sum(sol[ts0:ts0+nts])) if nts else 0.0
+        self.solver_rows.append({'scenario': self.label, 'replication': self.seed, 'time_s': t,
+                                 'horizon_start_s': t, 'horizon_s': horizon_s, 'slot_s': slot_s, 'n_slots': K,
+                                 'solver': 'scipy.optimize.milp/HiGHS', 'mode': '15min_rolling_horizon_milp',
+                                 'status': status, 'message': msg, 'objective': objective, 'mip_gap': gap,
+                                 'n_binary': nx, 'n_continuous': total - nx, 'n_constraints': len(constraints),
+                                 'n_tasks_horizon': T, 'candidate_agvs': n, 'available_pads': avail_pads,
+                                 'solve_time_s': elapsed, 'time_limit_hit': time_limit_hit, 'infeasible': infeasible,
+                                 'fallback_used': fallback, 'safety_slack_total': total_safety_slack,
+                                 'safety_slack_max': max_safety_slack, 'task_slack_sum': task_slack_sum,
+                                 'objective_type': 'normalized_weighted_proxy',
+                                 'urgent_task_slack_weight': 5.0, 'task_slack_weight': 1.0,
+                                 'soc_safety_slack_weight': 100.0, 'wpt_loss_weight': 0.02})
+        return sorted(chosen, key=lambda a: a.agv_id)[:avail_pads], 'C5-15min-RH-MILP'
 
     def schedule_opportunity_until(self, t, next_arrival, next_task):
         # same as V2, but C3-vs-C4 diagnostic uses per-AGV preview for the C4 side.
@@ -183,6 +365,12 @@ class V3Sim(V2Sim):
             else:
                 self.cfg['_expected_contention_wait_s'] = 0.0
             chosen, reason = self.choose(cands, t, next_task, len(avail))
+            if not chosen:
+                # A valid C5 rolling-horizon decision may be "do not charge in the first slot".
+                # Advance to the next receding-horizon decision epoch (or the next task arrival)
+                # so the DES clock cannot stall at the same t.
+                t = min(next_arrival, t + q)
+                continue
             for a, p in zip(chosen, avail):
                 nt = self.preview_task_map([a], t, next_task).get(a.agv_id, next_task)
                 start = max(t, p.available); wait = max(0, p.available - t); a.charge_wait_s += wait; p.wait_s += wait
@@ -253,6 +441,24 @@ class V3Sim(V2Sim):
         if self.strategy == 'C5':
             m['solver_computation_time_s'] = self.c5_solver_time_s
             m['solver_calls'] = self.c5_solver_calls
+            if self.solver_rows:
+                df = pd.DataFrame(self.solver_rows)
+                m['solver_mean_time_s'] = df['solve_time_s'].mean()
+                m['solver_median_time_s'] = df['solve_time_s'].median()
+                m['solver_p95_time_s'] = df['solve_time_s'].quantile(0.95)
+                m['solver_max_time_s'] = df['solve_time_s'].max()
+                m['solver_mean_binary_variables'] = df['n_binary'].mean()
+                m['solver_mean_constraints'] = df['n_constraints'].mean()
+                m['solver_infeasible_calls'] = df['infeasible'].sum()
+                m['solver_time_limit_calls'] = df['time_limit_hit'].sum()
+                m['solver_fallback_calls'] = df['fallback_used'].sum()
+                m['solver_safety_slack_total'] = df['safety_slack_total'].fillna(0).sum()
+                m['solver_task_slack_total'] = df['task_slack_sum'].fillna(0).sum()
+            else:
+                for k in ['solver_mean_time_s','solver_median_time_s','solver_p95_time_s','solver_max_time_s',
+                          'solver_mean_binary_variables','solver_mean_constraints','solver_infeasible_calls',
+                          'solver_time_limit_calls','solver_fallback_calls','solver_safety_slack_total','solver_task_slack_total']:
+                    m[k] = 0.0
         else:
             m['solver_computation_time_s'] = 0.0
             m['solver_calls'] = 0
@@ -359,6 +565,9 @@ def main(debug=False):
         append_csv(RESULTS/'agv_level_results.csv', agv); append_csv(RESULTS/'pad_level_results.csv', pad)
         append_csv(RESULTS/'priority_features_raw.csv', feat); append_csv(RESULTS/'decision_diagnostics.csv', dec)
         append_csv(RESULTS/'solver_statistics.csv', solver); append_csv(RESULTS/'milp_schedule.csv', sched)
+        if not (RESULTS/'milp_schedule.csv').exists():
+            pd.DataFrame(columns=['scenario','replication','time_s','horizon_start_s','slot_index','execute_first_slot',
+                                  'agv_id','preview_task_id','pad_rank','predicted_eta','slot_s','horizon_s']).to_csv(RESULTS/'milp_schedule.csv', index=False)
         all_out += outs; all_feat += feat; all_solver += solver
         print(f'V3 replication {r+1}/{reps} done')
     raw = pd.DataFrame(all_out)

@@ -1,0 +1,6 @@
+metric,C4,C5,C4_minus_C5
+mean_delay_min,6.4882,40.7553,-34.2671
+urgent_on_time_pct,81.9243,36.622,45.3023
+completion_rate_pct,97.3516,97.5977,-0.2461
+wpt_loss_kwh,7.3947,10.1812,-2.7865
+fleet_min_soc_pct,22.3317,19.664,2.6677

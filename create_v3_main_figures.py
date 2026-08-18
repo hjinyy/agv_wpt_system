@@ -28,6 +28,7 @@ features_raw = pd.read_csv(SRC / 'priority_features_raw.csv')
 decisions = pd.read_csv(SRC / 'decision_diagnostics.csv')
 
 STRATEGIES = ['C1', 'C2', 'C3', 'C4', 'C5']
+STRATEGY_LABELS = {'C1': 'C1', 'C2': 'C2', 'C3': 'C3', 'C4': 'C4', 'C5': 'C5\n(15-min RH-MILP)'}
 STRATEGIES_4 = ['C1', 'C2', 'C3', 'C4']
 COLORS = {'C1': '#6c757d', 'C2': '#4c78a8', 'C3': '#59a14f', 'C4': '#e15759', 'C5': '#7b3294'}
 MARKERS = {'C1': 'o', 'C2': 's', 'C3': '^', 'C4': 'D', 'C5': 'P'}
@@ -62,7 +63,7 @@ def fig1():
         x = np.arange(len(STRATEGIES)); w=.35
         ax.bar(x-w/2, d1['mean'], width=w, color=[COLORS[s] for s in STRATEGIES], alpha=.80, yerr=d1['ci95'], capsize=3, label='Mean task delay')
         ax.set_ylabel('Mean task delay [min]')
-        ax.set_xticks(x, STRATEGIES)
+        ax.set_xticks(x, [STRATEGY_LABELS[s] for s in STRATEGIES])
         ax.set_title(title, fontweight='bold')
         ax2 = ax.twinx()
         ax2.plot(x+w/2, d2['mean'], color='black', marker='o', lw=1.4, label=y2label)
@@ -71,7 +72,7 @@ def fig1():
         ax2.grid(False)
         lines, labels = ax.get_legend_handles_labels(); lines2, labels2 = ax2.get_legend_handles_labels()
         ax.legend(lines+lines2, labels+labels2, frameon=False, loc='upper left')
-    fig.suptitle('Figure 1. V3 Base vs Primary Challenge performance using corrected C4 and C5 benchmark', y=1.02, fontweight='bold')
+    fig.suptitle('Figure 1. V3 Base vs Primary Challenge with corrected C4 and C5 15-min RH-MILP benchmark', y=1.02, fontweight='bold')
     save(fig, 'Figure1_V3_Base_vs_Challenge')
 
 def fig2():
@@ -88,7 +89,7 @@ def fig2():
     sizes = 35 + (df['completion_rate'] - df['completion_rate'].min()) / max(1e-9, (df['completion_rate'].max()-df['completion_rate'].min())) * 180
     for _, r in df.iterrows():
         ax.scatter(r.mean_delay, r.urgent_on_time_rate, s=float(sizes.loc[_]), color=COLORS[r.strategy], marker=MARKERS[r.strategy], edgecolor='black', linewidth=.7, alpha=.88)
-        ax.annotate(r.strategy, (r.mean_delay, r.urgent_on_time_rate), xytext=(6,5), textcoords='offset points', fontweight='bold')
+        ax.annotate(STRATEGY_LABELS[r.strategy].replace('\n', ' '), (r.mean_delay, r.urgent_on_time_rate), xytext=(6,5), textcoords='offset points', fontweight='bold')
     ax.set_xlabel('Mean task delay [min]')
     ax.set_ylabel('Urgent-task on-time completion [%]')
     ax.set_title('Figure 2. V3 trade-off map: C3 beats C4 on primary challenge, C5 is benchmark', loc='left', fontweight='bold')
