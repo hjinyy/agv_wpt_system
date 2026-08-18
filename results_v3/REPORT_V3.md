@@ -89,3 +89,38 @@ Interpretation: `E_next` now has nonzero normalized variance and nonzero raw kWh
 - `decision_diagnostics.csv`
 - `full_horizon_milp_check.json`
 - `REPORT_V3.md`
+
+
+## V3 final figure provenance correction
+
+A previous file named `create_v3_main_figures.py` incorrectly read from `results_v2/` while writing to `results_v3_figures/`. That output must not be used as V3 evidence. The generator has been replaced and now hard-checks that its source directory is exactly `results_v3/`.
+
+New V3-only figure inputs:
+
+- `results_v3/base_case_runs.csv` — corrected C4 Base Case, 50 replications, C1-C5.
+- `results_v3/c1_c5_results.csv` — corrected C4 Primary Challenge, 50 replications, C1-C5.
+- `results_v3/stress_grid.csv` — corrected C4 stress grid, 18 scenarios × 50 replications × C1-C4.
+- `results_v3/priority_feature_statistics.csv` and `results_v3/priority_features_raw.csv` — V3 corrected C4 feature diagnostics.
+- `results_v3/decision_diagnostics.csv` — V3 C3-vs-C4 decision diagnostics.
+
+V3 Base Case means:
+
+| strategy   |   mean_delay |   completion_rate |   urgent_on_time_rate |
+|:-----------|-------------:|------------------:|----------------------:|
+| C1         |        3.427 |            99.746 |                   100 |
+| C2         |        0.205 |            99.775 |                   100 |
+| C3         |        0.205 |            99.775 |                   100 |
+| C4         |        0.205 |            99.775 |                   100 |
+| C5         |        0.205 |            99.775 |                   100 |
+
+V3 Primary Challenge data used by Figure 2:
+
+| strategy   |   mean_delay |   urgent_on_time_rate |   completion_rate |   wpt_loss |
+|:-----------|-------------:|----------------------:|------------------:|-----------:|
+| C1         |       38.954 |                37.859 |            97.71  |      9.697 |
+| C2         |        4.012 |                72.591 |            99.037 |      8.656 |
+| C3         |        6.073 |                85.288 |            97.418 |      6.999 |
+| C4         |        6.488 |                81.924 |            97.352 |      7.395 |
+| C5         |        0.497 |                88.238 |            99.784 |      5.629 |
+
+V3 stress grid size: `3600` rows, `18` scenarios. Figure 4 reports C4-vs-C3 delay improvement with negative values preserved; it no longer claims unconditional C4 advantage.

@@ -21,3 +21,4 @@ results_v4_contribution_figures_improved/
 
 # Very large local-only raw event output (> GitHub file limit)
 results_v2/task_level_results.csv
+results_v3/stress_priority_features_raw.csv

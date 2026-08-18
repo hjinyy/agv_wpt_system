@@ -1,45 +1,23 @@
-# Main Figure Selection for V3
+# V3 Figure Provenance and Selection
 
-## Data sources used
+## Critical provenance rule
 
-The four main figures were regenerated from V2 CSV outputs without changing the underlying simulation results. The inputs were:
+These figures read only from `results_v3/`. The previous `create_v3_main_figures.py` incorrectly read `results_v2/`; that output is invalid for final V3 reporting.
 
-- `results_v2/base_case_runs.csv` for Original Base Case strategy metrics.
-- `results_v2/challenge_runs.csv` for Primary Challenge strategy metrics.
-- `results_v2/stress_grid.csv` for workload × pad × power design-region analysis.
-- `results_v2/priority_features.csv` for aggregated C4 feature variance diagnostics.
-- `results_v2/priority_features_raw_sample.csv` only for traceability of feature distributions; the main plotted Figure 3(b) uses aggregated standard deviations.
-- `results_v2/decision_diagnostics.csv` for contention-event and C4-vs-C3 different-decision diagnostics.
+## V3 input files
 
-All bars and points represent means across 50 replications. Where error bars are shown, they are 95% confidence intervals of the replication mean, which is more appropriate than raw standard deviation for publication figures focused on comparing expected strategy performance.
+- `results_v3/base_case_runs.csv`
+- `results_v3/c1_c5_results.csv`
+- `results_v3/stress_grid.csv`
+- `results_v3/priority_feature_statistics.csv`
+- `results_v3/priority_features_raw.csv`
+- `results_v3/decision_diagnostics.csv`
 
-## Why exactly these four figures were selected
+## Why these four figures
 
-The requested paper/presentation story has four logical claims, so the main figure set was limited to one figure per claim:
+1. Figure 1 establishes Base vs Challenge behavior under the corrected V3 model.
+2. Figure 2 honestly shows the V3 trade-off, including that C3 can beat C4 in Primary Challenge.
+3. Figure 3 verifies the actual C4 fix: AGV-specific feature variance under contention.
+4. Figure 4 replaces the invalid V2 heatmap with a V3 stress-grid C4-vs-C3 map, including negative regions.
 
-1. **Figure 1 — Problem motivation and base/challenge contrast.** It shows that the Base Case mainly proves the value of opportunity charging, while the Challenge Case creates meaningful separation among C2, C3, and C4. This prevents the paper from implying that C4 must always dominate.
-2. **Figure 2 — Trade-off summary.** It condenses the Challenge Case into a Pareto-style view: C2 is delay-oriented, C3 is urgent-deadline-oriented, and C4 is a compromise with energy implications.
-3. **Figure 3 — Mechanistic diagnosis.** It demonstrates that C4 really made different decisions from C3 and that the score inputs had nonzero variance. This supports the scheduler contribution rather than just reporting output metrics.
-4. **Figure 4 — Operating-region/design implication.** It shows when C4 is useful across workload, pad count, and power, supporting the “resource scarcity + task heterogeneity” conclusion.
-
-Together these four figures form a compact story: Base Case convergence → Challenge trade-off → C4 decision mechanism → C4 advantage region.
-
-## Figures intentionally not selected as main figures
-
-Several V2 figures were not carried into the main paper set:
-
-- Separate one-metric bar charts for completion rate, low-SOC stoppage, charging waiting time, and pad utilization were omitted because they fragment the story and repeat information captured in Figures 1–2.
-- Individual workload-vs-delay, workload-vs-urgent-rate, pad-count, and power line plots were replaced by Figure 4, which integrates the full stress grid more efficiently.
-- Full feature-distribution plots and raw decision-event plots were reduced to Figure 3's diagnostic panels because the paper needs mechanism evidence, not every diagnostic trace.
-- Large task-level or AGV-level trajectory plots were omitted from the main set because they are useful for validation but less central to the proposed scheduler argument.
-
-## Is the four-figure main story sufficient?
-
-Yes. The four selected figures are sufficient for the main paper/presentation because each directly supports one of the four core messages and avoids redundant metric-by-metric plotting. The set also makes the negative/conditional finding clear: C4 is not universally superior, and its value appears when contention and heterogeneity exist.
-
-## Supplementary figure candidates, if absolutely needed
-
-Keep the main figure count at four. If supplementary material is allowed, only these two additions are recommended:
-
-1. **Supplementary Figure S1 — Full ablation matrix.** Equal vs variable distance, 0% vs 20% urgent tasks, and fixed vs variable eta, shown as compact grouped bars for delay, urgent on-time, and WPT loss. This would support feature-contribution claims without overloading the main paper.
-2. **Supplementary Figure S2 — SOC and pad-utilization validation traces.** A representative Challenge Case run showing SOC trajectories and pad occupancy. This would reassure readers that the finite-horizon simulation and charging quantum dynamics are physically reasonable.
+No V2 stress-grid or V2 priority-feature data are used.

@@ -1,0 +1,3 @@
+metric,mean,ci95
+Contention events / rep.,638.58,30.79649165473236
+C4 differs from C3 [%],53.09825284661074,0.7064524799453092

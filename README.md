@@ -38,10 +38,13 @@ uv pip install --python .venv/bin/python simpy numpy pandas scipy matplotlib pyy
 
 - `results_v3/REPORT_V3.md`
 - `results_v3/c1_c5_results.csv`
+- `results_v3/base_case_runs.csv`
+- `results_v3/stress_grid.csv`
 - `results_v3/c4_c5_comparison.csv`
 - `results_v3/milp_schedule.csv`
 - `results_v3/solver_statistics.csv`
 - `results_v3/priority_feature_statistics.csv`
+- `results_v3_figures/Figure*_V3_*.png`, `*.pdf`
 - `README_V3.md`
 
 ## Branch policy
