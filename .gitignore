@@ -13,5 +13,11 @@ __pycache__/
 *.log
 .DS_Store
 
+# Archived/legacy experiment outputs stay on archive branches, not main
+results/
+results_v2/
+results_v4_contribution_figures/
+results_v4_contribution_figures_improved/
+
 # Very large local-only raw event output (> GitHub file limit)
 results_v2/task_level_results.csv

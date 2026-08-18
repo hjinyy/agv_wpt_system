@@ -1,6 +1,17 @@
-# WPT AGV Opportunity Charging Simulation
+# AGV WPT System — Latest Mainline (V3)
 
-Python 기반 WPT(Wireless Power Transfer) 다중 AGV opportunity charging scheduling 연구용 시뮬레이션입니다.
+이 저장소의 `main` 브랜치는 항상 **최신 연구 버전만** 유지합니다. 과거 실험 결과와 중간 산출물은 별도 archive branch로 보존합니다.
+
+## 현재 main 버전
+
+**V3 — C4 next-task feature fix + C5 MILP charging benchmark**
+
+핵심 내용:
+
+- C4 수정: contention 시 모든 AGV가 동일한 `next_task`를 보던 문제를 수정하고, WMS preview 가정하에 AGV별 next assigned task 기반 `E_next_i`, `D_i`를 계산합니다.
+- C5 추가: `scipy.optimize.milp` / HiGHS 기반 rolling MILP charging allocation benchmark를 추가했습니다.
+- C1~C5 동일 seed/common random numbers로 비교합니다.
+- 결과는 `results_v3/`에 저장되어 있습니다.
 
 ## 실행 환경
 
@@ -10,35 +21,33 @@ uv venv --python 3.11 .venv
 uv pip install --python .venv/bin/python simpy numpy pandas scipy matplotlib pyyaml pytest tabulate
 ```
 
-## 빠른 검증
+## V3 실행
 
 ```bash
+# 빠른 debug / smoke test
+.venv/bin/python v3_runner.py --debug
+
+# V3 50 replication 실행
+.venv/bin/python v3_runner.py
+
+# 테스트
 .venv/bin/python -m pytest -q
-.venv/bin/python main.py --fast
 ```
 
-## 전체 실험
+## 주요 V3 산출물
 
-```bash
-.venv/bin/python main.py
-```
+- `results_v3/REPORT_V3.md`
+- `results_v3/c1_c5_results.csv`
+- `results_v3/c4_c5_comparison.csv`
+- `results_v3/milp_schedule.csv`
+- `results_v3/solver_statistics.csv`
+- `results_v3/priority_feature_statistics.csv`
+- `README_V3.md`
 
-전체 실험은 Base/Scenario A~D/Ablation을 50 replications로 실행하고 `results/`에 CSV, 그림, 보고서를 저장합니다.
+## Branch policy
 
-## 주요 결과 파일
+- `main`: 최신 버전만 유지합니다.
+- `archive/v1-v2-results`: V1/V2 결과와 기존 `results/`, `results_v2/` 보존용 branch입니다.
+- `archive/all-experiments-pre-cleanup`: main 정리 전 전체 실험/figure 산출물 보존용 branch입니다.
 
-- `results/raw_runs.csv`
-- `results/summary_by_scenario.csv`
-- `results/summary_by_strategy.csv`
-- `results/agv_level_results.csv`
-- `results/pad_level_results.csv`
-- `results/priority_feature_statistics.csv`
-- `results/ablation_efficiency.csv`
-- `results/design_guideline.csv`
-- `results/design_grid_summary.csv`, `results/final_design_table.csv`
-- `results/REPORT.md`
-- `results/figures/*.png`, `*.pdf`
-
-## 연구상 주의
-
-50 W prototype 효율은 산업용 WPT 절대효율 예측값이 아니라 relative efficiency scenario model로만 사용했습니다. C1~C4는 동일 seed의 task arrival/picking/SOC/efficiency sequence를 공유합니다.
+자세한 규칙은 `docs/BRANCH_POLICY.md`를 참고하세요.
