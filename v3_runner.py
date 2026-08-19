@@ -268,7 +268,8 @@ class V3Sim(V2Sim):
         conflict_weight = float(self.cfg.get('c5_conflict_weight', 6.0))
         early_charge_weight = float(self.cfg.get('c5_early_charge_weight', 0.8))
         wpt_loss_weight = float(self.cfg.get('c5_wpt_loss_weight', 0.02))
-        priority_weight = float(self.cfg.get('c5_priority_weight', 60.0))
+        priority_weight = float(self.cfg.get('c5_priority_weight', 0.0))
+        kpi_risk_weight = float(self.cfg.get('c5_kpi_risk_weight', 30.0))
         c[ss0:ss0+nss] = safety_slack_weight
         # Operational reserve slack: creates a proactive charging incentive before mandatory charge.
         c[rs0:rs0+nrs] = reserve_slack_weight
@@ -283,7 +284,21 @@ class V3Sim(V2Sim):
         for i, a in enumerate(cands):
             nt = preview.get(a.agv_id, next_task)
             current_reserve_deficit = max(0.0, reserve_soc - a.soc)
-            priority_score = self.features(a, t, nt, self.eta(nt, a, mode=self.predicted_eta_mode))['score']
+            # Independent KPI-risk prior for charging actions. This deliberately does not use
+            # C4_priority_score. It is built from physical/KPI quantities: reserve deficit,
+            # next-task energy, urgency, deadline pressure, and critical-SOC pressure.
+            next_energy_norm = min(1.0, task_energy(self.cfg, nt.distance_m) / max(1e-9, task_energy(self.cfg, 40)))
+            slack_s = nt.deadline - (t + task_time(self.cfg, nt.distance_m))
+            deadline_pressure = max(0.0, min(1.0, (600.0 - slack_s) / 600.0))
+            urgent_pressure = 1.0 if nt.task_type == 'urgent' else 0.0
+            critical_pressure = max(0.0, min(1.0, (self.cfg['critical_soc'] - a.soc) / max(1e-9, self.cfg['critical_soc'] - self.cfg['min_soc'])))
+            kpi_risk_score = (
+                4.0 * max(0.0, current_reserve_deficit) / max(1e-9, reserve_soc - self.cfg['min_soc'])
+                + 0.75 * next_energy_norm
+                + 1.25 * urgent_pressure
+                + 1.50 * deadline_pressure
+                + 2.00 * critical_pressure
+            )
             for k in range(K):
                 eta = self.eta(nt, a, mode=self.predicted_eta_mode)
                 loss = self.cfg['wpt_power_kw'] * (1 - eta) * qh
@@ -293,9 +308,9 @@ class V3Sim(V2Sim):
                 # Mild earlier-action reward prevents MPC from endlessly postponing all charge
                 # to discarded future slots when an AGV is already below reserve.
                 early_charge_credit = early_charge_weight * current_reserve_deficit * (K - k) / K
-                priority_credit = priority_weight * priority_score * (K - k) / K
+                kpi_risk_credit = kpi_risk_weight * kpi_risk_score * (K - k) / K
                 for p in pads:
-                    c[xid(i, p, k)] += wpt_loss_weight * loss + conflict_penalty - early_charge_credit - priority_credit
+                    c[xid(i, p, k)] += wpt_loss_weight * loss + conflict_penalty - early_charge_credit - kpi_risk_credit
 
         tic = time.perf_counter()
         status = -999; msg = ''; objective = np.nan; gap = np.nan; x = None
@@ -374,6 +389,7 @@ class V3Sim(V2Sim):
                                  'forecast_conflict_weight': conflict_weight,
                                  'early_charge_weight': early_charge_weight,
                                  'priority_weight': priority_weight,
+                                 'kpi_risk_weight': kpi_risk_weight,
                                  'soc_safety_slack_weight': safety_slack_weight, 'soc_reserve_slack_weight': reserve_slack_weight,
                                  'c5_reserve_soc': reserve_soc, 'wpt_loss_weight': wpt_loss_weight})
         return sorted(chosen, key=lambda a: a.agv_id)[:avail_pads], 'C5-15min-RH-MILP'

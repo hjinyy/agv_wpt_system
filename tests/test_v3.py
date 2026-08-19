@@ -54,7 +54,8 @@ def test_v3_c5_uses_15_min_rolling_horizon_and_records_solver_stats():
     assert 'task_slack_sum' in first
     assert first['objective_type'] == 'reserve_and_task_risk_weighted_proxy'
     assert first['c5_reserve_soc'] == 0.30
-    assert first['priority_weight'] == 60.0
+    assert first['priority_weight'] == 0.0
+    assert first['kpi_risk_weight'] == 30.0
     assert first['forecast_conflict_weight'] == 6.0
     assert 'actual_busy_agv_slot_pairs' in first
     assert 'forecast_busy_agv_slot_pairs' in first
