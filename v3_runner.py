@@ -140,18 +140,21 @@ class V3Sim(V2Sim):
         # Variable blocks
         nx = n * m * K
         nsoc = n * (K + 1)
-        nss = n * (K + 1)
-        nts = T  # task energy/schedule slack proxy
-        total = nx + nsoc + nss + nts
+        nss = n * (K + 1)      # emergency safety slack below min_soc
+        nrs = n * (K + 1)      # operational reserve slack below reserve_soc
+        nts = T                # task energy / deadline-risk slack proxy
+        total = nx + nsoc + nss + nrs + nts
         x0 = 0
         soc0 = x0 + nx
         ss0 = soc0 + nsoc
-        ts0 = ss0 + nss
+        rs0 = ss0 + nss
+        ts0 = rs0 + nrs
 
         def xid(i, p, k): return x0 + (i * m + p) * K + k
         def yids(i, k): return [xid(i, p, k) for p in pads]
         def socid(i, k): return soc0 + i * (K + 1) + k
         def ssid(i, k): return ss0 + i * (K + 1) + k
+        def rsid(i, k): return rs0 + i * (K + 1) + k
         def tsid(j): return ts0 + j
 
         integrality = np.zeros(total)
@@ -183,8 +186,11 @@ class V3Sim(V2Sim):
                 row = np.zeros(total)
                 for p in pads: row[xid(i, p, k)] = 1
                 add(row, 0, 1)
-        # C. AGV availability based on actual current busy state + shadow task forecast.
+        # C. AGV availability. Actual current busy state is a hard constraint; shadow forecast
+        # task overlap is recorded and penalized, not hard-forbidden, because charging decisions
+        # can shift future task timing in the receding-horizon approximation.
         busy = np.zeros((n, K), dtype=bool)
+        forecast_busy = np.zeros((n, K), dtype=bool)
         for i, a in enumerate(cands):
             for k in range(K):
                 s0 = t + k * slot_s; s1 = s0 + slot_s
@@ -198,7 +204,7 @@ class V3Sim(V2Sim):
             for k in range(K):
                 s0 = t + k * slot_s; s1 = s0 + slot_s
                 if max(s0, ft['pred_start']) < min(s1, ft['pred_completion']) - 1e-9:
-                    busy[i, k] = True
+                    forecast_busy[i, k] = True
         for i in range(n):
             for k in range(K):
                 if busy[i, k]:
@@ -230,19 +236,23 @@ class V3Sim(V2Sim):
                 charge_soc = self.cfg['wpt_power_kw'] * eta * qh / self.cfg['battery_kwh']
                 for p in pads: row[xid(i, p, k)] -= charge_soc
                 add(row, -task_energy_by_ik[i, k], -task_energy_by_ik[i, k])
-        # E/F. Safety lower bound with slack: SOC + s_soc >= min_soc.
+        # E/F. Safety lower bound with emergency slack and softer operational reserve slack.
+        reserve_soc = float(self.cfg.get('c5_reserve_soc', 0.30))
         for i in range(n):
             for k in range(K + 1):
                 row = np.zeros(total); row[socid(i, k)] = 1; row[ssid(i, k)] = 1
                 add(row, self.cfg['min_soc'], np.inf)
+                row = np.zeros(total); row[socid(i, k)] = 1; row[rsid(i, k)] = 1
+                add(row, reserve_soc, np.inf)
 
-        # Task energy availability slack proxy. If forecast SOC before task start is too low,
-        # slack approximates downstream delay/tardiness pressure required to recover charge.
+        # Task energy availability / deadline-risk slack proxy.  Unlike the previous version,
+        # this uses reserve_soc + task energy rather than min_soc + task energy, so C5 sees
+        # the operational cost of waiting until the battery is almost depleted.
         for j, i, k, ft in task_at_slot:
             row = np.zeros(total)
             row[tsid(j)] = 1
             row[socid(i, k)] = 1
-            add(row, self.cfg['min_soc'] + ft['energy_soc'], np.inf)
+            add(row, reserve_soc + ft['energy_soc'], np.inf)
 
         A = np.vstack(constraints) if constraints else np.zeros((0, total))
         lc = LinearConstraint(A, np.array(lo), np.array(hi))
@@ -250,23 +260,42 @@ class V3Sim(V2Sim):
 
         # Normalized objective. Units are documented in REPORT_V3. No post-hoc tuning is done.
         c = np.zeros(total)
-        # Safety slack: high but finite because infeasible horizons must not crash the DES.
-        c[ss0:ss0+nss] = 100.0
+        # Emergency safety slack: high but finite because infeasible horizons must not crash the DES.
+        safety_slack_weight = float(self.cfg.get('c5_safety_slack_weight', 200.0))
+        reserve_slack_weight = float(self.cfg.get('c5_reserve_slack_weight', 6.0))
+        task_slack_weight = float(self.cfg.get('c5_task_slack_weight', 4.0))
+        urgent_task_bonus = float(self.cfg.get('c5_urgent_task_bonus', 12.0))
+        conflict_weight = float(self.cfg.get('c5_conflict_weight', 6.0))
+        early_charge_weight = float(self.cfg.get('c5_early_charge_weight', 0.8))
+        wpt_loss_weight = float(self.cfg.get('c5_wpt_loss_weight', 0.02))
+        priority_weight = float(self.cfg.get('c5_priority_weight', 60.0))
+        c[ss0:ss0+nss] = safety_slack_weight
+        # Operational reserve slack: creates a proactive charging incentive before mandatory charge.
+        c[rs0:rs0+nrs] = reserve_slack_weight
         for j, ft in enumerate(forecast_tasks):
-            base = 1.0
+            base = task_slack_weight
             if ft['task'].task_type == 'urgent':
-                base += 4.0
+                base += urgent_task_bonus
             # Existing predicted tardiness/delay amplifies the task slack penalty.
-            base += min(2.0, ft['pred_tardiness_s'] / max(1.0, horizon_s))
-            base += 0.25 * min(2.0, ft['pred_delay_s'] / max(1.0, horizon_s))
+            base += 4.0 * min(2.0, ft['pred_tardiness_s'] / max(1.0, horizon_s))
+            base += 1.0 * min(2.0, ft['pred_delay_s'] / max(1.0, horizon_s))
             c[tsid(j)] = base
         for i, a in enumerate(cands):
             nt = preview.get(a.agv_id, next_task)
+            current_reserve_deficit = max(0.0, reserve_soc - a.soc)
+            priority_score = self.features(a, t, nt, self.eta(nt, a, mode=self.predicted_eta_mode))['score']
             for k in range(K):
                 eta = self.eta(nt, a, mode=self.predicted_eta_mode)
                 loss = self.cfg['wpt_power_kw'] * (1 - eta) * qh
-                # Small normalized loss term; service metrics dominate.
-                for p in pads: c[xid(i, p, k)] += 0.02 * loss
+                # Small normalized loss term; service metrics and reserve risk dominate.
+                # Forecast-task overlap is not forbidden, but it carries a delay-risk penalty.
+                conflict_penalty = conflict_weight if forecast_busy[i, k] else 0.0
+                # Mild earlier-action reward prevents MPC from endlessly postponing all charge
+                # to discarded future slots when an AGV is already below reserve.
+                early_charge_credit = early_charge_weight * current_reserve_deficit * (K - k) / K
+                priority_credit = priority_weight * priority_score * (K - k) / K
+                for p in pads:
+                    c[xid(i, p, k)] += wpt_loss_weight * loss + conflict_penalty - early_charge_credit - priority_credit
 
         tic = time.perf_counter()
         status = -999; msg = ''; objective = np.nan; gap = np.nan; x = None
@@ -312,25 +341,41 @@ class V3Sim(V2Sim):
         # If the MILP incumbent intentionally selects no AGV in the first slot, execute no
         # charging. This is a valid first-slot MPC action, not a fallback.
 
-        # Safety slack aggregate from incumbent solution if available.
-        total_safety_slack = np.nan; max_safety_slack = np.nan; task_slack_sum = np.nan
+        # Slack and availability aggregates from incumbent solution if available.
+        total_safety_slack = np.nan; max_safety_slack = np.nan; reserve_slack_sum = np.nan; reserve_slack_max = np.nan; task_slack_sum = np.nan
         if x is not None and 'res' in locals() and res.x is not None:
             sol = res.x
             total_safety_slack = float(np.sum(sol[ss0:ss0+nss]))
             max_safety_slack = float(np.max(sol[ss0:ss0+nss])) if nss else 0.0
+            reserve_slack_sum = float(np.sum(sol[rs0:rs0+nrs]))
+            reserve_slack_max = float(np.max(sol[rs0:rs0+nrs])) if nrs else 0.0
             task_slack_sum = float(np.sum(sol[ts0:ts0+nts])) if nts else 0.0
+        total_agv_slot_pairs = int(n * K)
+        actual_busy_agv_slot_pairs = int(np.sum(busy))
+        forecast_busy_agv_slot_pairs = int(np.sum(forecast_busy))
+        available_agv_slot_pairs = int(total_agv_slot_pairs - actual_busy_agv_slot_pairs)
         self.solver_rows.append({'scenario': self.label, 'replication': self.seed, 'time_s': t,
                                  'horizon_start_s': t, 'horizon_s': horizon_s, 'slot_s': slot_s, 'n_slots': K,
                                  'solver': 'scipy.optimize.milp/HiGHS', 'mode': '15min_rolling_horizon_milp',
                                  'status': status, 'message': msg, 'objective': objective, 'mip_gap': gap,
                                  'n_binary': nx, 'n_continuous': total - nx, 'n_constraints': len(constraints),
                                  'n_tasks_horizon': T, 'candidate_agvs': n, 'available_pads': avail_pads,
+                                 'total_agv_slot_pairs': total_agv_slot_pairs,
+                                 'actual_busy_agv_slot_pairs': actual_busy_agv_slot_pairs,
+                                 'forecast_busy_agv_slot_pairs': forecast_busy_agv_slot_pairs,
+                                 'available_agv_slot_pairs': available_agv_slot_pairs,
                                  'solve_time_s': elapsed, 'time_limit_hit': time_limit_hit, 'infeasible': infeasible,
                                  'fallback_used': fallback, 'safety_slack_total': total_safety_slack,
-                                 'safety_slack_max': max_safety_slack, 'task_slack_sum': task_slack_sum,
-                                 'objective_type': 'normalized_weighted_proxy',
-                                 'urgent_task_slack_weight': 5.0, 'task_slack_weight': 1.0,
-                                 'soc_safety_slack_weight': 100.0, 'wpt_loss_weight': 0.02})
+                                 'safety_slack_max': max_safety_slack, 'reserve_slack_total': reserve_slack_sum,
+                                 'reserve_slack_max': reserve_slack_max, 'task_slack_sum': task_slack_sum,
+                                 'objective_type': 'reserve_and_task_risk_weighted_proxy',
+                                 'urgent_task_slack_weight': task_slack_weight + urgent_task_bonus,
+                                 'task_slack_weight': task_slack_weight,
+                                 'forecast_conflict_weight': conflict_weight,
+                                 'early_charge_weight': early_charge_weight,
+                                 'priority_weight': priority_weight,
+                                 'soc_safety_slack_weight': safety_slack_weight, 'soc_reserve_slack_weight': reserve_slack_weight,
+                                 'c5_reserve_soc': reserve_soc, 'wpt_loss_weight': wpt_loss_weight})
         return sorted(chosen, key=lambda a: a.agv_id)[:avail_pads], 'C5-15min-RH-MILP'
 
     def schedule_opportunity_until(self, t, next_arrival, next_task):
@@ -449,15 +494,21 @@ class V3Sim(V2Sim):
                 m['solver_max_time_s'] = df['solve_time_s'].max()
                 m['solver_mean_binary_variables'] = df['n_binary'].mean()
                 m['solver_mean_constraints'] = df['n_constraints'].mean()
+                m['solver_mean_available_agv_slot_pairs'] = df.get('available_agv_slot_pairs', pd.Series(dtype=float)).mean()
+                m['solver_mean_actual_busy_agv_slot_pairs'] = df.get('actual_busy_agv_slot_pairs', pd.Series(dtype=float)).mean()
+                m['solver_mean_forecast_busy_agv_slot_pairs'] = df.get('forecast_busy_agv_slot_pairs', pd.Series(dtype=float)).mean()
                 m['solver_infeasible_calls'] = df['infeasible'].sum()
                 m['solver_time_limit_calls'] = df['time_limit_hit'].sum()
                 m['solver_fallback_calls'] = df['fallback_used'].sum()
                 m['solver_safety_slack_total'] = df['safety_slack_total'].fillna(0).sum()
+                m['solver_reserve_slack_total'] = df.get('reserve_slack_total', pd.Series(dtype=float)).fillna(0).sum()
                 m['solver_task_slack_total'] = df['task_slack_sum'].fillna(0).sum()
             else:
                 for k in ['solver_mean_time_s','solver_median_time_s','solver_p95_time_s','solver_max_time_s',
-                          'solver_mean_binary_variables','solver_mean_constraints','solver_infeasible_calls',
-                          'solver_time_limit_calls','solver_fallback_calls','solver_safety_slack_total','solver_task_slack_total']:
+                          'solver_mean_binary_variables','solver_mean_constraints','solver_mean_available_agv_slot_pairs',
+                          'solver_mean_actual_busy_agv_slot_pairs','solver_mean_forecast_busy_agv_slot_pairs',
+                          'solver_infeasible_calls','solver_time_limit_calls',
+                          'solver_fallback_calls','solver_safety_slack_total','solver_reserve_slack_total','solver_task_slack_total']:
                     m[k] = 0.0
         else:
             m['solver_computation_time_s'] = 0.0

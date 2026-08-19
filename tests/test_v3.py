@@ -50,6 +50,15 @@ def test_v3_c5_uses_15_min_rolling_horizon_and_records_solver_stats():
     assert first['n_binary'] == first['candidate_agvs'] * first['available_pads'] * 15
     assert 'n_constraints' in first
     assert 'safety_slack_total' in first
+    assert 'reserve_slack_total' in first
+    assert 'task_slack_sum' in first
+    assert first['objective_type'] == 'reserve_and_task_risk_weighted_proxy'
+    assert first['c5_reserve_soc'] == 0.30
+    assert first['priority_weight'] == 60.0
+    assert first['forecast_conflict_weight'] == 6.0
+    assert 'actual_busy_agv_slot_pairs' in first
+    assert 'forecast_busy_agv_slot_pairs' in first
+    assert 'available_agv_slot_pairs' in first
 
 
 def test_v3_c5_pad_capacity_and_first_slot_execution_metadata():

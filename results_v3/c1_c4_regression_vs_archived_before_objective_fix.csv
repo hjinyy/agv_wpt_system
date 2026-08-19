@@ -1,0 +1,5 @@
+strategy,mean_delay_diff,urgent_on_time_rate_diff,completion_rate_diff,wpt_loss_diff,fleet_min_soc_diff,charging_wait_diff
+C1,0.0,0.0,0.0,0.0,0.0,0.0
+C2,0.0,0.0,0.0,0.0,0.0,0.0
+C3,0.0,0.0,0.0,0.0,0.0,0.0
+C4,0.0,0.0,0.0,0.0,0.0,0.0

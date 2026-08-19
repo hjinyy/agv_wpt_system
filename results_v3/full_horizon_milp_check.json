@@ -7,5 +7,5 @@
   "n_binary": 120,
   "status": 0,
   "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)",
-  "solve_time_s": 0.0020561959827318788
+  "solve_time_s": 0.002173510962165892
 }
