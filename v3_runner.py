@@ -261,15 +261,18 @@ class V3Sim(V2Sim):
         # Normalized objective. Units are documented in REPORT_V3. No post-hoc tuning is done.
         c = np.zeros(total)
         # Emergency safety slack: high but finite because infeasible horizons must not crash the DES.
-        safety_slack_weight = float(self.cfg.get('c5_safety_slack_weight', 200.0))
-        reserve_slack_weight = float(self.cfg.get('c5_reserve_slack_weight', 6.0))
+        lambda_soc = float(self.cfg.get('c5_lambda_soc', 1.0))
+        lambda_task = float(self.cfg.get('c5_lambda_task', 1.0))
+        lambda_kpi = float(self.cfg.get('c5_lambda_kpi', 1.0))
+        safety_slack_weight = lambda_soc * float(self.cfg.get('c5_safety_slack_weight', 200.0))
+        reserve_slack_weight = lambda_soc * float(self.cfg.get('c5_reserve_slack_weight', 6.0))
         task_slack_weight = float(self.cfg.get('c5_task_slack_weight', 4.0))
         urgent_task_bonus = float(self.cfg.get('c5_urgent_task_bonus', 12.0))
         conflict_weight = float(self.cfg.get('c5_conflict_weight', 6.0))
         early_charge_weight = float(self.cfg.get('c5_early_charge_weight', 0.8))
         wpt_loss_weight = float(self.cfg.get('c5_wpt_loss_weight', 0.02))
         priority_weight = float(self.cfg.get('c5_priority_weight', 0.0))
-        kpi_risk_weight = float(self.cfg.get('c5_kpi_risk_weight', 30.0))
+        kpi_risk_weight = lambda_kpi * float(self.cfg.get('c5_kpi_risk_weight', 30.0))
         c[ss0:ss0+nss] = safety_slack_weight
         # Operational reserve slack: creates a proactive charging incentive before mandatory charge.
         c[rs0:rs0+nrs] = reserve_slack_weight
@@ -280,7 +283,7 @@ class V3Sim(V2Sim):
             # Existing predicted tardiness/delay amplifies the task slack penalty.
             base += 4.0 * min(2.0, ft['pred_tardiness_s'] / max(1.0, horizon_s))
             base += 1.0 * min(2.0, ft['pred_delay_s'] / max(1.0, horizon_s))
-            c[tsid(j)] = base
+            c[tsid(j)] = lambda_task * base
         for i, a in enumerate(cands):
             nt = preview.get(a.agv_id, next_task)
             current_reserve_deficit = max(0.0, reserve_soc - a.soc)
@@ -386,6 +389,8 @@ class V3Sim(V2Sim):
                                  'objective_type': 'reserve_and_task_risk_weighted_proxy',
                                  'urgent_task_slack_weight': task_slack_weight + urgent_task_bonus,
                                  'task_slack_weight': task_slack_weight,
+                                 'lambda_soc': lambda_soc, 'lambda_task': lambda_task, 'lambda_kpi': lambda_kpi,
+                                 'task_scale': lambda_task,
                                  'forecast_conflict_weight': conflict_weight,
                                  'early_charge_weight': early_charge_weight,
                                  'priority_weight': priority_weight,

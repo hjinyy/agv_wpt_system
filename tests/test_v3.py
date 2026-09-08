@@ -85,6 +85,37 @@ def test_v3_c5_pad_capacity_and_first_slot_execution_metadata():
         assert 1 <= r['slot_index'] <= 15
 
 
+def test_v3_c5_objective_scale_factors_change_only_requested_coefficients():
+    cfg = load_cfg()
+    cfg.update({
+        'operation_hours': 0.25,
+        'n_agvs': 2,
+        'n_pads': 1,
+        'task_arrival_rate_per_h': 20,
+        'c5_lambda_soc': 2.0,
+        'c5_lambda_task': 0.5,
+        'c5_lambda_kpi': 0.5,
+    })
+    distances = {i: cfg['picking_staging_distance_m'] for i in range(1, cfg['n_picking_points'] + 1)}
+    tasks, init = generate_common(cfg, cfg['seed0'], distances=distances, urgent_ratio=0.1)
+    lookup = {t.task_id: i for i, t in enumerate(tasks)}
+    sim = V3Sim(cfg, 'C5', cfg['seed0'], tasks, init, 'unit_c5_scales', variable_eta=True, task_index_lookup=lookup)
+
+    sim.run()
+
+    first = sim.solver_rows[0]
+    assert first['lambda_soc'] == 2.0
+    assert first['lambda_task'] == 0.5
+    assert first['lambda_kpi'] == 0.5
+    assert first['soc_safety_slack_weight'] == 400.0
+    assert first['soc_reserve_slack_weight'] == 12.0
+    assert first['task_scale'] == 0.5
+    assert first['kpi_risk_weight'] == 15.0
+    assert first['forecast_conflict_weight'] == 6.0
+    assert first['early_charge_weight'] == 0.8
+    assert first['wpt_loss_weight'] == 0.02
+
+
 def test_v3_c1_to_c4_short_regression_unchanged_by_c5_code():
     cfg = load_cfg()
     cfg.update({'operation_hours': 0.25, 'n_agvs': 2, 'n_pads': 1, 'task_arrival_rate_per_h': 20})
