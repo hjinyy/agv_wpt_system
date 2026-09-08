@@ -1,0 +1,19 @@
+{
+  "topology": "identical planar square spirals",
+  "outer_side_mm": 300.0,
+  "inner_side_mm": 100.0,
+  "turns": 15,
+  "turn_pitch_mm": 7.142857,
+  "air_gap_mm": 40.0,
+  "frequency_khz": 85.0,
+  "compensation": "series-series",
+  "coil_resistance_ohm_each": 0.15,
+  "fha_ac_load_ohm": 0.623,
+  "rated_power_kw": 3.0,
+  "self_inductance_uH_each": 55.413697847873124,
+  "resonance_capacitance_nF_each": 63.268170968272905,
+  "quality_factor_each": 197.2989015427391,
+  "mutual_inductance_method": "segmented Neumann line integral over all 15 square turns",
+  "efficiency_method": "lossy SS compensated resonant-link fundamental harmonic approximation",
+  "des_misalignment_distribution": "uniform discrete 0-175 mm in 25 mm increments"
+}

@@ -23,3 +23,6 @@ results_v4_contribution_figures_improved/
 results_v2/task_level_results.csv
 results_v3/stress_priority_features_raw.csv
 results_v_lit_eta/stress_priority_features_raw.csv
+
+# Retain only curated physical-WPT outputs in Git; raw DES event logs stay local.
+results_v_physical_wpt_175mm/*
