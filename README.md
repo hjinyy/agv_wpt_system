@@ -1,58 +1,32 @@
-# AGV WPT System — Latest Mainline (V3)
+# AGV-WPT DES Final Evaluation
 
-이 저장소의 `main` 브랜치는 항상 **최신 연구 버전만** 유지합니다. 과거 실험 결과와 중간 산출물은 별도 archive branch로 보존합니다.
+This repository contains the final discrete-event simulation for opportunity charging of logistics-center AGVs using a geometry-derived wireless-power-transfer model.
 
-## 현재 main 버전
+## Final strategies
 
-**V3 — revised C1 baseline + corrected C4 + C5 15-min rolling-horizon MILP charging benchmark**
+- C1: conventional threshold charging baseline
+- C2: idle-time priority
+- C3: low-SOC priority
+- C4: frozen multi-feature priority heuristic
+- C5: frozen 15-minute rolling-horizon MILP benchmark
 
-핵심 내용:
+Final frozen parameters are recorded in `results_final/final_frozen_parameters.json`:
 
-- C1 revised baseline: 기존 20%→90% full-charge 대신 SOC≤30%에서 시작해 70%에서 종료하는 conventional threshold charging을 공식 baseline으로 사용합니다.
-- C4 수정: contention 시 모든 AGV가 동일한 `next_task`를 보던 문제를 수정하고, WMS preview 가정하에 AGV별 next assigned task 기반 `E_next_i`, `D_i`를 계산합니다.
-- C5 추가: `scipy.optimize.milp` / HiGHS 기반 **15-min rolling-horizon MILP charging benchmark**를 사용합니다. 15개 60초 charging slot을 동시에 최적화하고 첫 slot만 실행하는 MPC/receding-horizon 방식입니다. 최신 C5 objective는 SOC reserve risk, forecast task-impact slack, forecast conflict penalty, 독립 KPI-risk charging term을 포함하며, C4 priority score는 사용하지 않습니다. C5에도 C2~C4와 동일한 mandatory SOC safety check를 적용합니다.
-- C1~C5 동일 seed/common random numbers로 비교합니다.
-- 결과는 `results_v3/`에 저장되어 있습니다.
+- C4: `w1=0.55`, `w2=0.175`, `w3=0.105`, `w4=0.07`, `w5=0.10`
+- C5: `lambda_soc=2.0`, `lambda_task=1.5`, `lambda_kpi=1.5`
 
-## 실행 환경
+## Run the final evaluation
 
 ```bash
-cd /home/hy/wpt_agv_opportunity_charging
 uv venv --python 3.11 .venv
 uv pip install --python .venv/bin/python simpy numpy pandas scipy matplotlib pyyaml pytest tabulate
-```
-
-## V3 실행
-
-```bash
-# 빠른 debug / smoke test
-.venv/bin/python v3_runner.py --debug
-
-# V3 50 replication 실행
-.venv/bin/python v3_runner.py
-
-# 테스트
+AGV_WPT_MPL_CONFIG=/tmp/agv_wpt_mpl MPLCONFIGDIR=/tmp/agv_wpt_mpl .venv/bin/python final_evaluation.py
+AGV_WPT_MPL_CONFIG=/tmp/agv_wpt_mpl MPLCONFIGDIR=/tmp/agv_wpt_mpl .venv/bin/python generate_final_figures.py
 .venv/bin/python -m pytest -q
 ```
 
-## 주요 V3 산출물
+`results_final/` contains replication-level Base Case, Primary Challenge, and Stress Grid results, paired statistics, C5 solver statistics, final figures in PNG/PDF, and `FINAL_REPORT.md`.
 
-- `results_v3/REPORT_V3.md`
-- `results_v3/c1_c5_results.csv`
-- `results_v3/base_case_runs.csv`
-- `results_v3/stress_grid.csv`
-- `results_v3/c4_c5_comparison.csv`
-- `results_v3/milp_schedule.csv`
-- `results_v3/solver_statistics.csv`
-- `results_v3/horizon_sensitivity.csv`
-- `results_v3/priority_feature_statistics.csv`
-- `results_v3_figures/Figure*_V3_*.png`, `*.pdf`
-- `README_V3.md`
+## Archive
 
-## Branch policy
-
-- `main`: 최신 버전만 유지합니다.
-- `archive/v1-v2-results`: V1/V2 결과와 기존 `results/`, `results_v2/` 보존용 branch입니다.
-- `archive/all-experiments-pre-cleanup`: main 정리 전 전체 실험/figure 산출물 보존용 branch입니다.
-
-자세한 규칙은 `docs/BRANCH_POLICY.md`를 참고하세요.
+Historical runners, sensitivity studies, refinement experiments, and intermediate outputs are preserved on the `archive/pre-final-evaluation` branch.

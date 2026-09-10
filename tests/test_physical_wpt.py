@@ -21,6 +21,6 @@ def test_square_spiral_mutual_inductance_is_symmetric_about_coaxial_alignment():
 
 
 def test_des_physical_efficiency_states_stop_at_the_normal_charging_limit():
-    from run_physical_wpt_experiments import MISALIGNMENT_MM
+    from simulation.final_wpt import MISALIGNMENT_MM
 
     assert np.array_equal(MISALIGNMENT_MM, np.arange(0.0, 176.0, 25.0))

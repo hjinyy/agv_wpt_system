@@ -1,0 +1,19 @@
+{
+  "parameters_frozen": true,
+  "C4": {
+    "w1": 0.55,
+    "w2": 0.175,
+    "w3": 0.105,
+    "w4": 0.07,
+    "w5": 0.1
+  },
+  "C5": {
+    "lambda_soc": 2.0,
+    "lambda_task": 1.5,
+    "lambda_kpi": 1.5,
+    "soc_shortage": 400,
+    "soc_risk": 12,
+    "task_scale": 1.5,
+    "kpi_risk": 45
+  }
+}
