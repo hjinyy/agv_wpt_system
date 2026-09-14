@@ -5,6 +5,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import csv
 
+import pandas as pd
+
 from final_evaluation import (
     C4_FINAL_WEIGHTS,
     C5_FINAL_SCALES,
@@ -13,6 +15,7 @@ from final_evaluation import (
     final_configuration,
     _write_csv,
 )
+import generate_final_figures as figures
 
 
 def test_final_configuration_freezes_parameters_and_uses_independent_seeds():
@@ -32,3 +35,18 @@ def test_csv_writer_preserves_c5_only_solver_columns_when_c1_row_is_first(tmp_pa
     with path.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     assert rows[1]["solver_calls"] == "3"
+
+
+def test_urgent_on_time_is_not_applicable_to_base_case_without_urgent_tasks():
+    assert not figures._is_urgent_on_time_applicable("Base Case")
+    assert figures._is_urgent_on_time_applicable("Primary Challenge")
+
+
+def test_base_primary_figure_renders_without_an_urgent_base_case_metric(tmp_path, monkeypatch):
+    base = pd.DataFrame({"strategy": ["C1", "C2", "C3", "C4", "C5"], "mean_delay": [1, 2, 3, 4, 5], "completion_rate": [99, 99, 99, 99, 99]})
+    primary = pd.DataFrame({"strategy": ["C1", "C2", "C3", "C4", "C5"], "mean_delay": [1, 2, 3, 4, 5], "urgent_on_time_rate": [50, 60, 70, 80, 90]})
+    monkeypatch.setattr(figures, "FIGURES", tmp_path)
+
+    figures._base_primary_figure(base, primary)
+
+    assert (tmp_path / "Figure1_Final_Base_Primary.png").is_file()

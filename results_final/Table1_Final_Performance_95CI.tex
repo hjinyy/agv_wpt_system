@@ -8,11 +8,11 @@
 Scenario & Strategy & Delay [min] & Urgent on-time [\%] & Completion [\%] & WPT loss [kWh] \\
 \midrule
 \multicolumn{6}{l}{\textit{Base Case}} \\
- & C1 & 1.10 $\pm$ 0.13 & 100.00 $\pm$ 0.00 & 99.77 $\pm$ 0.04 & 5.12 $\pm$ 0.06 \\
- & C2 & 0.20 $\pm$ 0.01 & 100.00 $\pm$ 0.00 & 99.80 $\pm$ 0.03 & 9.21 $\pm$ 0.07 \\
- & C3 & 0.20 $\pm$ 0.01 & 100.00 $\pm$ 0.00 & 99.80 $\pm$ 0.03 & 9.18 $\pm$ 0.07 \\
- & C4 & 0.20 $\pm$ 0.01 & 100.00 $\pm$ 0.00 & 99.80 $\pm$ 0.03 & 9.18 $\pm$ 0.07 \\
- & C5 & 0.20 $\pm$ 0.01 & 100.00 $\pm$ 0.00 & 99.80 $\pm$ 0.03 & 8.98 $\pm$ 0.08 \\
+ & C1 & 1.10 $\pm$ 0.13 & N/A & 99.77 $\pm$ 0.04 & 5.12 $\pm$ 0.06 \\
+ & C2 & 0.20 $\pm$ 0.01 & N/A & 99.80 $\pm$ 0.03 & 9.21 $\pm$ 0.07 \\
+ & C3 & 0.20 $\pm$ 0.01 & N/A & 99.80 $\pm$ 0.03 & 9.18 $\pm$ 0.07 \\
+ & C4 & 0.20 $\pm$ 0.01 & N/A & 99.80 $\pm$ 0.03 & 9.18 $\pm$ 0.07 \\
+ & C5 & 0.20 $\pm$ 0.01 & N/A & 99.80 $\pm$ 0.03 & 8.98 $\pm$ 0.08 \\
 \multicolumn{6}{l}{\textit{Primary Challenge}} \\
  & C1 & 6.25 $\pm$ 1.37 & 55.20 $\pm$ 2.67 & 99.55 $\pm$ 0.08 & 7.01 $\pm$ 0.14 \\
  & C2 & 4.78 $\pm$ 1.53 & 72.37 $\pm$ 3.11 & 98.54 $\pm$ 0.46 & 8.05 $\pm$ 0.21 \\
@@ -22,5 +22,5 @@ Scenario & Strategy & Delay [min] & Urgent on-time [\%] & Completion [\%] & WPT 
 \bottomrule
 \end{tabular}
 \vspace{2pt}
-\begin{minipage}{0.98\linewidth}\footnotesize Task arrivals follow the scenario-specific Poisson process. CIs are two-sided t intervals (df=49). All strategies recorded zero actual low-SOC stops, infeasible MILP calls, and simulation failures.\end{minipage}
+\begin{minipage}{0.98\linewidth}\footnotesize Base Case uses an urgent-task ratio of 0; urgent on-time completion is therefore not applicable. Task arrivals follow the scenario-specific Poisson process. CIs are two-sided t intervals (df=49). All strategies recorded zero actual low-SOC stops, infeasible MILP calls, and simulation failures.\end{minipage}
 \end{table*}

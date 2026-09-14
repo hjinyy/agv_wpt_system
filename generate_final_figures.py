@@ -22,6 +22,10 @@ TABLE_METRICS = (
 )
 
 
+def _is_urgent_on_time_applicable(scenario: str) -> bool:
+    return scenario != "Base Case"
+
+
 def _save(figure: plt.Figure, name: str) -> None:
     figure.savefig(FIGURES / f"{name}.png", dpi=300, bbox_inches="tight")
     figure.savefig(FIGURES / f"{name}.pdf", bbox_inches="tight")
@@ -41,7 +45,10 @@ def _paired_mean_ci(values: pd.Series) -> tuple[float, float]:
 def _write_figure_statistics(base: pd.DataFrame, primary: pd.DataFrame, stress: pd.DataFrame) -> None:
     rows: list[pd.DataFrame] = []
     for scenario, frame in (("Base Case", base), ("Primary Challenge", primary)):
-        for metric in ("mean_delay", "urgent_on_time_rate", "completion_rate"):
+        metrics = ["mean_delay", "completion_rate"]
+        if _is_urgent_on_time_applicable(scenario):
+            metrics.insert(1, "urgent_on_time_rate")
+        for metric in metrics:
             table = _mean_ci(frame, metric)
             table.insert(0, "scenario", scenario)
             table.insert(2, "metric", metric)
@@ -68,10 +75,16 @@ def _write_publication_table(base: pd.DataFrame, primary: pd.DataFrame) -> None:
             row: dict[str, object] = {"Scenario": scenario, "Strategy": strategy, "n": 50}
             for label, _ in TABLE_METRICS:
                 table = metric_tables[label]
-                row[f"{label} mean"] = float(table.loc[strategy, "mean"])
-                row[f"{label} std"] = float(table.loc[strategy, "std"])
-                row[f"{label} CI95 half-width"] = float(table.loc[strategy, "ci95"])
-                row[label] = f"{table.loc[strategy, 'mean']:.2f} ± {table.loc[strategy, 'ci95']:.2f}"
+                if label == "Urgent on-time [%]" and not _is_urgent_on_time_applicable(scenario):
+                    row[f"{label} mean"] = np.nan
+                    row[f"{label} std"] = np.nan
+                    row[f"{label} CI95 half-width"] = np.nan
+                    row[label] = "N/A"
+                else:
+                    row[f"{label} mean"] = float(table.loc[strategy, "mean"])
+                    row[f"{label} std"] = float(table.loc[strategy, "std"])
+                    row[f"{label} CI95 half-width"] = float(table.loc[strategy, "ci95"])
+                    row[label] = f"{table.loc[strategy, 'mean']:.2f} ± {table.loc[strategy, 'ci95']:.2f}"
             rows.append(row)
 
     table = pd.DataFrame(rows)
@@ -81,7 +94,7 @@ def _write_publication_table(base: pd.DataFrame, primary: pd.DataFrame) -> None:
     markdown_rows = ["| " + " | ".join(headers) + " |", "| " + " | ".join("---" for _ in headers) + " |"]
     markdown_rows.extend("| " + " | ".join(str(row[column]) for column in headers) + " |" for _, row in display.iterrows())
     markdown = "# Table 1. Final DES performance under stochastic task arrivals\n\n" + "\n".join(markdown_rows) + "\n\n"
-    markdown += "Note. Values are mean ± two-sided 95% t confidence-interval half-width across n=50 independent replications (df=49; seeds 4007–4056). Task arrivals follow the Poisson process configured for each scenario. All strategies had zero actual low-SOC stops, infeasible MILP calls, and simulation failures.\n"
+    markdown += "Note. Values are mean ± two-sided 95% t confidence-interval half-width across n=50 independent replications (df=49; seeds 4007–4056). Base Case uses an urgent-task ratio of 0, so urgent on-time completion is not applicable. Task arrivals follow the Poisson process configured for each scenario. All strategies had zero actual low-SOC stops, infeasible MILP calls, and simulation failures.\n"
     (OUT / "Table1_Final_Performance_95CI.md").write_text(markdown, encoding="utf-8")
 
     latex_lines = [
@@ -105,7 +118,7 @@ def _write_publication_table(base: pd.DataFrame, primary: pd.DataFrame) -> None:
         "\\bottomrule",
         "\\end{tabular}",
         "\\vspace{2pt}",
-        "\\begin{minipage}{0.98\\linewidth}\\footnotesize Task arrivals follow the scenario-specific Poisson process. CIs are two-sided t intervals (df=49). All strategies recorded zero actual low-SOC stops, infeasible MILP calls, and simulation failures.\\end{minipage}",
+        "\\begin{minipage}{0.98\\linewidth}\\footnotesize Base Case uses an urgent-task ratio of 0; urgent on-time completion is therefore not applicable. Task arrivals follow the scenario-specific Poisson process. CIs are two-sided t intervals (df=49). All strategies recorded zero actual low-SOC stops, infeasible MILP calls, and simulation failures.\\end{minipage}",
         "\\end{table*}",
     ])
     (OUT / "Table1_Final_Performance_95CI.tex").write_text("\n".join(latex_lines) + "\n", encoding="utf-8")
@@ -113,17 +126,22 @@ def _write_publication_table(base: pd.DataFrame, primary: pd.DataFrame) -> None:
 
 def _base_primary_figure(base: pd.DataFrame, primary: pd.DataFrame) -> None:
     figure, axes = plt.subplots(1, 2, figsize=(12.0, 4.2))
-    for axis, frame, title in ((axes[0], base, "Base Case"), (axes[1], primary, "Primary Challenge")):
-        summary = frame.groupby("strategy")[["mean_delay", "urgent_on_time_rate"]].mean().reindex(STRATEGIES)
-        positions = np.arange(len(STRATEGIES))
-        axis.bar(positions, summary["mean_delay"], color=[COLORS[item] for item in STRATEGIES])
-        axis.set_xticks(positions, STRATEGIES)
-        axis.set_ylabel("Mean task delay [min]")
-        axis.set_title(title)
-        secondary = axis.twinx()
-        secondary.plot(positions, summary["urgent_on_time_rate"], color="black", marker="o")
-        secondary.set_ylabel("Urgent on-time completion [%]")
-        secondary.grid(False)
+    positions = np.arange(len(STRATEGIES))
+    base_summary = base.groupby("strategy")["mean_delay"].mean().reindex(STRATEGIES)
+    axes[0].bar(positions, base_summary, color=[COLORS[item] for item in STRATEGIES])
+    axes[0].set_xticks(positions, STRATEGIES)
+    axes[0].set_ylabel("Mean task delay [min]")
+    axes[0].set_title("Base Case (urgent on-time: N/A; urgent ratio = 0)")
+
+    primary_summary = primary.groupby("strategy")[["mean_delay", "urgent_on_time_rate"]].mean().reindex(STRATEGIES)
+    axes[1].bar(positions, primary_summary["mean_delay"], color=[COLORS[item] for item in STRATEGIES])
+    axes[1].set_xticks(positions, STRATEGIES)
+    axes[1].set_ylabel("Mean task delay [min]")
+    axes[1].set_title("Primary Challenge")
+    primary_secondary = axes[1].twinx()
+    primary_secondary.plot(positions, primary_summary["urgent_on_time_rate"], color="black", marker="o")
+    primary_secondary.set_ylabel("Urgent on-time completion [%]")
+    primary_secondary.grid(False)
     figure.suptitle("Figure 1. Base Case and Primary Challenge performance comparison")
     figure.tight_layout()
     _save(figure, "Figure1_Final_Base_Primary")
