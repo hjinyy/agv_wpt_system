@@ -14,6 +14,12 @@ FIGURES = OUT / "figures"
 STRATEGIES = ("C1", "C2", "C3", "C4", "C5")
 COLORS = {"C1": "#6c757d", "C2": "#4c78a8", "C3": "#59a14f", "C4": "#e15759", "C5": "#7b3294"}
 T_95_DF49 = 2.0096
+TABLE_METRICS = (
+    ("Mean delay [min]", "mean_delay"),
+    ("Urgent on-time [%]", "urgent_on_time_rate"),
+    ("Completion [%]", "completion_rate"),
+    ("WPT loss [kWh]", "wpt_loss"),
+)
 
 
 def _save(figure: plt.Figure, name: str) -> None:
@@ -52,6 +58,57 @@ def _write_figure_statistics(base: pd.DataFrame, primary: pd.DataFrame, stress: 
             rows.append(pd.DataFrame({"scenario": [scenario], "strategy": ["C4_vs_C3"], "metric": [metric], "mean": [mean], "std": [values.std(ddof=1)], "count": [values.count()], "ci95": [ci95]}))
 
     pd.concat(rows, ignore_index=True).to_csv(OUT / "figure_statistics.csv", index=False)
+
+
+def _write_publication_table(base: pd.DataFrame, primary: pd.DataFrame) -> None:
+    rows: list[dict[str, object]] = []
+    for scenario, frame in (("Base Case", base), ("Primary Challenge", primary)):
+        metric_tables = {label: _mean_ci(frame, column).set_index("strategy") for label, column in TABLE_METRICS}
+        for strategy in STRATEGIES:
+            row: dict[str, object] = {"Scenario": scenario, "Strategy": strategy, "n": 50}
+            for label, _ in TABLE_METRICS:
+                table = metric_tables[label]
+                row[f"{label} mean"] = float(table.loc[strategy, "mean"])
+                row[f"{label} std"] = float(table.loc[strategy, "std"])
+                row[f"{label} CI95 half-width"] = float(table.loc[strategy, "ci95"])
+                row[label] = f"{table.loc[strategy, 'mean']:.2f} ± {table.loc[strategy, 'ci95']:.2f}"
+            rows.append(row)
+
+    table = pd.DataFrame(rows)
+    table.to_csv(OUT / "Table1_Final_Performance_95CI.csv", index=False)
+    display = table[["Scenario", "Strategy", "n", *(label for label, _ in TABLE_METRICS)]]
+    headers = list(display.columns)
+    markdown_rows = ["| " + " | ".join(headers) + " |", "| " + " | ".join("---" for _ in headers) + " |"]
+    markdown_rows.extend("| " + " | ".join(str(row[column]) for column in headers) + " |" for _, row in display.iterrows())
+    markdown = "# Table 1. Final DES performance under stochastic task arrivals\n\n" + "\n".join(markdown_rows) + "\n\n"
+    markdown += "Note. Values are mean ± two-sided 95% t confidence-interval half-width across n=50 independent replications (df=49; seeds 4007–4056). Task arrivals follow the Poisson process configured for each scenario. All strategies had zero actual low-SOC stops, infeasible MILP calls, and simulation failures.\n"
+    (OUT / "Table1_Final_Performance_95CI.md").write_text(markdown, encoding="utf-8")
+
+    latex_lines = [
+        "\\begin{table*}[t]",
+        "\\centering",
+        "\\caption{Final DES performance under stochastic task arrivals (mean $\\pm$ 95\\% CI; $n=50$).}",
+        "\\label{tab:final-performance}",
+        "\\small",
+        "\\begin{tabular}{llrrrr}",
+        "\\toprule",
+        "Scenario & Strategy & Delay [min] & Urgent on-time [\\%] & Completion [\\%] & WPT loss [kWh] \\\\",
+        "\\midrule",
+    ]
+    for scenario in ("Base Case", "Primary Challenge"):
+        scenario_rows = display[display["Scenario"] == scenario]
+        latex_lines.append(f"\\multicolumn{{6}}{{l}}{{\\textit{{{scenario}}}}} \\\\")
+        for _, row in scenario_rows.iterrows():
+            latex_lines.append(
+                f" & {row['Strategy']} & {row['Mean delay [min]'].replace(' ± ', r' $\pm$ ')} & {row['Urgent on-time [%]'].replace(' ± ', r' $\pm$ ')} & {row['Completion [%]'].replace(' ± ', r' $\pm$ ')} & {row['WPT loss [kWh]'].replace(' ± ', r' $\pm$ ')} \\\\")
+    latex_lines.extend([
+        "\\bottomrule",
+        "\\end{tabular}",
+        "\\vspace{2pt}",
+        "\\begin{minipage}{0.98\\linewidth}\\footnotesize Task arrivals follow the scenario-specific Poisson process. CIs are two-sided t intervals (df=49). All strategies recorded zero actual low-SOC stops, infeasible MILP calls, and simulation failures.\\end{minipage}",
+        "\\end{table*}",
+    ])
+    (OUT / "Table1_Final_Performance_95CI.tex").write_text("\n".join(latex_lines) + "\n", encoding="utf-8")
 
 
 def _base_primary_figure(base: pd.DataFrame, primary: pd.DataFrame) -> None:
@@ -148,6 +205,7 @@ def main() -> None:
     primary = pd.read_csv(OUT / "primary_challenge_results.csv")
     stress = pd.read_csv(OUT / "stress_grid_results.csv")
     _write_figure_statistics(base, primary, stress)
+    _write_publication_table(base, primary)
     _base_primary_figure(base, primary)
     _tradeoff_figure(primary)
     _c4_diagnostics_figure(primary)
