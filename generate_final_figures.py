@@ -114,54 +114,52 @@ def _write_publication_table(base: pd.DataFrame, primary: pd.DataFrame) -> None:
 def _base_primary_figure(base: pd.DataFrame, primary: pd.DataFrame) -> None:
     figure, axes = plt.subplots(1, 2, figsize=(12.0, 4.2))
     for axis, frame, title in ((axes[0], base, "Base Case"), (axes[1], primary, "Primary Challenge")):
-        delay = _mean_ci(frame, "mean_delay")
-        urgent = _mean_ci(frame, "urgent_on_time_rate")
+        summary = frame.groupby("strategy")[["mean_delay", "urgent_on_time_rate"]].mean().reindex(STRATEGIES)
         positions = np.arange(len(STRATEGIES))
-        axis.bar(positions, delay["mean"], yerr=delay["ci95"], capsize=3, color=[COLORS[item] for item in STRATEGIES])
+        axis.bar(positions, summary["mean_delay"], color=[COLORS[item] for item in STRATEGIES])
         axis.set_xticks(positions, STRATEGIES)
         axis.set_ylabel("Mean task delay [min]")
         axis.set_title(title)
         secondary = axis.twinx()
-        secondary.errorbar(positions, urgent["mean"], yerr=urgent["ci95"], color="black", marker="o", capsize=3)
+        secondary.plot(positions, summary["urgent_on_time_rate"], color="black", marker="o")
         secondary.set_ylabel("Urgent on-time completion [%]")
         secondary.grid(False)
-    figure.suptitle("Final C1-C5 evaluation: Base Case and Primary Challenge (mean ± 95% CI, n=50)")
+    figure.suptitle("Figure 1. Base Case and Primary Challenge performance comparison")
     figure.tight_layout()
     _save(figure, "Figure1_Final_Base_Primary")
 
 
 def _tradeoff_figure(primary: pd.DataFrame) -> None:
-    delay = _mean_ci(primary, "mean_delay").set_index("strategy")
-    urgent = _mean_ci(primary, "urgent_on_time_rate").set_index("strategy")
-    completion = _mean_ci(primary, "completion_rate").set_index("strategy")
+    summary = primary.groupby("strategy")[["mean_delay", "urgent_on_time_rate", "completion_rate"]].mean().reindex(STRATEGIES)
     figure, axis = plt.subplots(figsize=(6.6, 4.8))
-    sizes = 50 + 180 * (completion["mean"] - completion["mean"].min()) / max(1e-9, completion["mean"].max() - completion["mean"].min())
+    sizes = 50 + 180 * (summary["completion_rate"] - summary["completion_rate"].min()) / max(1e-9, summary["completion_rate"].max() - summary["completion_rate"].min())
     for strategy in STRATEGIES:
-        axis.errorbar(delay.loc[strategy, "mean"], urgent.loc[strategy, "mean"], xerr=delay.loc[strategy, "ci95"], yerr=urgent.loc[strategy, "ci95"], color=COLORS[strategy], capsize=3, linewidth=1.1, zorder=1)
-        axis.scatter(delay.loc[strategy, "mean"], urgent.loc[strategy, "mean"], s=float(sizes[strategy]), color=COLORS[strategy], edgecolor="black", zorder=2)
-        axis.annotate(strategy, (delay.loc[strategy, "mean"], urgent.loc[strategy, "mean"]), xytext=(5, 5), textcoords="offset points")
+        axis.scatter(summary.loc[strategy, "mean_delay"], summary.loc[strategy, "urgent_on_time_rate"], s=float(sizes[strategy]), color=COLORS[strategy], edgecolor="black")
+        axis.annotate(strategy, (summary.loc[strategy, "mean_delay"], summary.loc[strategy, "urgent_on_time_rate"]), xytext=(5, 5), textcoords="offset points")
     axis.set_xlabel("Mean task delay [min]")
     axis.set_ylabel("Urgent on-time completion [%]")
-    axis.set_title("Final Primary Challenge trade-off (mean ± 95% CI, n=50)")
+    axis.set_title("Figure 2. Primary Challenge strategy trade-off")
     axis.grid(alpha=0.3)
     _save(figure, "Figure2_Final_Primary_Tradeoff")
 
 
-def _c4_diagnostics_figure(primary: pd.DataFrame) -> None:
-    c4 = primary[primary["strategy"] == "C4"]
-    metrics = (
-        ("Charging contention\nevents / replication", "charging_contention_events", "events"),
-        ("C4 assignment differs\nfrom C3 [%]", "different_decision_rate_C4_vs_C3", "%"),
-    )
-    figure, axes = plt.subplots(1, 2, figsize=(9.0, 4.3))
-    for axis, (label, column, unit) in zip(axes, metrics):
-        mean, ci95 = _paired_mean_ci(c4[column])
-        axis.bar([0], [mean], yerr=[ci95], capsize=5, color=COLORS["C4"], edgecolor="black")
-        axis.set_xticks([0], [label])
-        axis.set_ylabel(unit)
-        axis.set_title(f"{mean:.1f} ± {ci95:.1f}")
-        axis.grid(axis="y", alpha=0.25)
-    figure.suptitle("Figure 3. C4 Priority Algorithm behavior verification (mean ± 95% CI, n=50)")
+def _c4_diagnostics_figure(diagnostics: pd.DataFrame) -> None:
+    figure, axes = plt.subplots(1, 2, figsize=(11.2, 4.1))
+    left = diagnostics[["charging_contention_events", "different_decision_rate_C4_vs_C3"]].mean()
+    left_axis = axes[0]
+    right_axis = left_axis.twinx()
+    left_axis.bar([0], [left["charging_contention_events"]], color="#9ecae1", edgecolor="black", width=0.52)
+    right_axis.bar([1], [left["different_decision_rate_C4_vs_C3"]], color="#f4a261", edgecolor="black", width=0.52)
+    left_axis.set_xticks([0, 1], ["Contention events\nper replication", "C4 differs\nfrom C3 [%]"])
+    left_axis.set_ylabel("Contention events")
+    right_axis.set_ylabel("Different-decision rate [%]")
+    left_axis.set_title("(a) Contention decision diagnostics")
+    feature_columns = ("one_minus_soc", "E_next", "T_idle", "eta_WPT", "D")
+    feature_names = ("1-SOC", "E_next", "T_idle", "eta_WPT", "D")
+    axes[1].bar(feature_names, [diagnostics[f"{column}_std"].mean() for column in feature_columns], color="#bdbdbd", edgecolor="black")
+    axes[1].set_ylabel("Mean within-replication feature std. [normalized]")
+    axes[1].set_title("(b) C4 candidate-feature variation")
+    figure.suptitle("Figure 3. C4 Priority Algorithm behavior verification")
     figure.tight_layout()
     _save(figure, "Figure3_Final_C4_Priority_Diagnostics")
 
@@ -169,22 +167,18 @@ def _c4_diagnostics_figure(primary: pd.DataFrame) -> None:
 def _stress_figure(stress: pd.DataFrame) -> None:
     rows: list[dict[str, float]] = []
     for label, group in stress.groupby("scenario"):
-        c3 = group[group["strategy"] == "C3"].set_index("replication")
-        c4 = group[group["strategy"] == "C4"].set_index("replication")
+        c3 = group[group["strategy"] == "C3"]
+        c4 = group[group["strategy"] == "C4"]
         workload, pads, power = (int(value) for value in label.removeprefix("stress_w").replace("_p", " ").replace("_kw", " ").split())
-        delay_mean, delay_ci = _paired_mean_ci(c3["mean_delay"] - c4["mean_delay"])
-        urgent_mean, urgent_ci = _paired_mean_ci(c4["urgent_on_time_rate"] - c3["urgent_on_time_rate"])
-        rows.append({"workload": workload, "pads": pads, "power": power, "delay_difference_min": delay_mean, "delay_ci95_min": delay_ci, "urgent_difference_pp": urgent_mean, "urgent_ci95_pp": urgent_ci})
+        rows.append({"workload": workload, "pads": pads, "power": power, "delay_improvement_pct": (c3["mean_delay"].mean() - c4["mean_delay"].mean()) / abs(c3["mean_delay"].mean()) * 100.0, "urgent_difference_pp": c4["urgent_on_time_rate"].mean() - c3["urgent_on_time_rate"].mean()})
     frame = pd.DataFrame(rows)
-    maximum = max(1.0, float(frame["delay_difference_min"].abs().max()))
+    maximum = max(1.0, float(frame["delay_improvement_pct"].abs().max()))
     figure, axes = plt.subplots(1, 3, figsize=(13.0, 4.0), sharey=True, layout="constrained")
     image = None
     for axis, power in zip(axes, (1, 3, 5)):
         subset = frame[frame["power"] == power]
-        matrix = subset.pivot(index="pads", columns="workload", values="delay_difference_min").sort_index()
-        delay_ci = subset.pivot(index="pads", columns="workload", values="delay_ci95_min").sort_index()
+        matrix = subset.pivot(index="pads", columns="workload", values="delay_improvement_pct").sort_index()
         urgent = subset.pivot(index="pads", columns="workload", values="urgent_difference_pp").sort_index()
-        urgent_ci = subset.pivot(index="pads", columns="workload", values="urgent_ci95_pp").sort_index()
         image = axis.imshow(matrix.values, cmap="RdBu", norm=TwoSlopeNorm(vmin=-maximum, vcenter=0, vmax=maximum), aspect="auto")
         axis.set_xticks(range(len(matrix.columns)), [str(value) for value in matrix.columns])
         axis.set_yticks(range(len(matrix.index)), [str(value) for value in matrix.index])
@@ -192,11 +186,45 @@ def _stress_figure(stress: pd.DataFrame) -> None:
         axis.set_title(f"Power = {power} kW")
         for row in range(matrix.shape[0]):
             for column in range(matrix.shape[1]):
-                axis.text(column, row, f"{matrix.iloc[row, column]:+.1f}±{delay_ci.iloc[row, column]:.1f}\n{urgent.iloc[row, column]:+.1f}±{urgent_ci.iloc[row, column]:.1f} pp", ha="center", va="center", fontsize=7)
+                axis.text(column, row, f"{matrix.iloc[row, column]:+.1f}%\n({urgent.iloc[row, column]:+.1f} pp)", ha="center", va="center", fontsize=8)
     axes[0].set_ylabel("WPT pads")
-    figure.colorbar(image, ax=axes, label="Paired C3 − C4 delay [min] (positive = C4 lower delay)")
-    figure.suptitle("Final Stress Grid: C4 versus C3 (mean ± 95% CI, n=50)")
+    figure.colorbar(image, ax=axes, label="C4 vs C3 delay improvement [%]")
+    figure.suptitle("Figure 4. C4 versus C3 Stress Grid")
     _save(figure, "Figure4_Final_C4_vs_C3_Stress_Grid")
+
+
+def _c5_ablation_figure(ablation: pd.DataFrame) -> None:
+    variants = ("Full objective", "No SOC term", "No task term", "No KPI-risk term")
+    summary = ablation.groupby("variant")[["mean_delay", "urgent_on_time_rate"]].mean().reindex(variants)
+    colors = [COLORS["C5"], "#8da0cb", "#fc8d62", "#66c2a5"]
+    figure, axes = plt.subplots(1, 2, figsize=(10.0, 4.3))
+    positions = np.arange(len(variants))
+    axes[0].bar(positions, summary["mean_delay"], color=colors, edgecolor="black")
+    axes[0].set_ylabel("Mean task delay [min]")
+    axes[0].set_title("(a) Task delay")
+    axes[1].bar(positions, summary["urgent_on_time_rate"], color=colors, edgecolor="black")
+    axes[1].set_ylabel("Urgent on-time completion [%]")
+    axes[1].set_title("(b) Urgent-task service")
+    for axis in axes:
+        axis.set_xticks(positions, ["Full", "No SOC", "No task", "No KPI-risk"], rotation=15)
+        axis.grid(axis="y", alpha=0.25)
+    figure.suptitle("Figure 5. C5 Objective Ablation Analysis")
+    figure.tight_layout()
+    _save(figure, "Figure5_Final_C5_Objective_Ablation")
+
+
+def _uncertainty_figure(primary: pd.DataFrame) -> None:
+    figure, axes = plt.subplots(1, 2, figsize=(10.2, 4.3))
+    positions = np.arange(len(STRATEGIES))
+    for axis, metric, label in ((axes[0], "mean_delay", "Mean task delay [min]"), (axes[1], "urgent_on_time_rate", "Urgent on-time completion [%]")):
+        summary = _mean_ci(primary, metric)
+        axis.bar(positions, summary["mean"], yerr=summary["ci95"], capsize=4, color=[COLORS[strategy] for strategy in STRATEGIES], edgecolor="black")
+        axis.set_xticks(positions, STRATEGIES)
+        axis.set_ylabel(label)
+        axis.grid(axis="y", alpha=0.25)
+    figure.suptitle("Figure 6. Primary Challenge replication uncertainty (mean ± 95% CI, n=50)")
+    figure.tight_layout()
+    _save(figure, "Figure6_Final_Replication_Uncertainty")
 
 
 def main() -> None:
@@ -204,12 +232,16 @@ def main() -> None:
     base = pd.read_csv(OUT / "base_case_results.csv")
     primary = pd.read_csv(OUT / "primary_challenge_results.csv")
     stress = pd.read_csv(OUT / "stress_grid_results.csv")
+    c4_diagnostics = pd.read_csv(OUT / "c4_priority_diagnostics.csv")
+    c5_ablation = pd.read_csv(OUT / "c5_objective_ablation.csv")
     _write_figure_statistics(base, primary, stress)
     _write_publication_table(base, primary)
     _base_primary_figure(base, primary)
     _tradeoff_figure(primary)
-    _c4_diagnostics_figure(primary)
+    _c4_diagnostics_figure(c4_diagnostics)
     _stress_figure(stress)
+    _c5_ablation_figure(c5_ablation)
+    _uncertainty_figure(primary)
 
 
 if __name__ == "__main__":
