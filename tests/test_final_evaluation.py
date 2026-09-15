@@ -50,3 +50,21 @@ def test_base_primary_figure_renders_without_an_urgent_base_case_metric(tmp_path
     figures._base_primary_figure(base, primary)
 
     assert (tmp_path / "Figure1_Final_Base_Primary.png").is_file()
+
+
+def test_figure6_boxplot_writes_exact_50_replication_plot_data(tmp_path, monkeypatch):
+    primary = pd.DataFrame(
+        {
+            "strategy": [strategy for strategy in ("C1", "C2", "C3", "C4", "C5") for _ in range(50)],
+            "replication": [replication for _ in ("C1", "C2", "C3", "C4", "C5") for replication in range(4007, 4057)],
+            "mean_delay": [float(replication % 11) for _ in ("C1", "C2", "C3", "C4", "C5") for replication in range(4007, 4057)],
+        }
+    )
+    monkeypatch.setattr(figures, "FIGURES", tmp_path)
+
+    figures._uncertainty_figure(primary)
+
+    plot_data = pd.read_csv(tmp_path / "Figure6_Final_Replication_Uncertainty_data.csv")
+    pd.testing.assert_frame_equal(plot_data, primary)
+    assert (tmp_path / "Figure6_Final_Replication_Uncertainty.png").is_file()
+    assert (tmp_path / "Figure6_Final_Replication_Uncertainty.pdf").is_file()

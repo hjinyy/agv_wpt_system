@@ -112,8 +112,11 @@ def _write_publication_table(base: pd.DataFrame, primary: pd.DataFrame) -> None:
         scenario_rows = display[display["Scenario"] == scenario]
         latex_lines.append(f"\\multicolumn{{6}}{{l}}{{\\textit{{{scenario}}}}} \\\\")
         for _, row in scenario_rows.iterrows():
-            latex_lines.append(
-                f" & {row['Strategy']} & {row['Mean delay [min]'].replace(' ± ', r' $\pm$ ')} & {row['Urgent on-time [%]'].replace(' ± ', r' $\pm$ ')} & {row['Completion [%]'].replace(' ± ', r' $\pm$ ')} & {row['WPT loss [kWh]'].replace(' ± ', r' $\pm$ ')} \\\\")
+            delay = row["Mean delay [min]"].replace(" ± ", " $\\pm$ ")
+            urgent = row["Urgent on-time [%]"].replace(" ± ", " $\\pm$ ")
+            completion = row["Completion [%]"].replace(" ± ", " $\\pm$ ")
+            loss = row["WPT loss [kWh]"].replace(" ± ", " $\\pm$ ")
+            latex_lines.append(f" & {row['Strategy']} & {delay} & {urgent} & {completion} & {loss} \\\\")
     latex_lines.extend([
         "\\bottomrule",
         "\\end{tabular}",
@@ -232,16 +235,52 @@ def _c5_ablation_figure(ablation: pd.DataFrame) -> None:
 
 
 def _uncertainty_figure(primary: pd.DataFrame) -> None:
-    figure, axes = plt.subplots(1, 2, figsize=(10.2, 4.3))
-    positions = np.arange(len(STRATEGIES))
-    for axis, metric, label in ((axes[0], "mean_delay", "Mean task delay [min]"), (axes[1], "urgent_on_time_rate", "Urgent on-time completion [%]")):
-        summary = _mean_ci(primary, metric)
-        axis.bar(positions, summary["mean"], yerr=summary["ci95"], capsize=4, color=[COLORS[strategy] for strategy in STRATEGIES], edgecolor="black")
-        axis.set_xticks(positions, STRATEGIES)
-        axis.set_ylabel(label)
-        axis.grid(axis="y", alpha=0.25)
-    figure.suptitle("Figure 6. Primary Challenge replication uncertainty (mean ± 95% CI, n=50)")
-    figure.tight_layout()
+    """Show the complete 50-replication delay distribution, not only its mean/CI."""
+    required = {"strategy", "replication", "mean_delay"}
+    if not required.issubset(primary.columns):
+        raise ValueError(f"Figure 6 requires columns {sorted(required)}")
+    counts = primary.groupby("strategy")["replication"].nunique().reindex(STRATEGIES)
+    if not (counts == 50).all():
+        raise ValueError(f"Figure 6 requires exactly 50 replications per strategy: {counts.to_dict()}")
+
+    plot_data = primary[["strategy", "replication", "mean_delay"]].copy()
+    plot_data.to_csv(FIGURES / "Figure6_Final_Replication_Uncertainty_data.csv", index=False)
+
+    figure, axis = plt.subplots(figsize=(8.4, 5.0))
+    values = [plot_data.loc[plot_data["strategy"] == strategy, "mean_delay"].to_numpy() for strategy in STRATEGIES]
+    box = axis.boxplot(
+        values,
+        tick_labels=STRATEGIES,
+        patch_artist=True,
+        widths=0.58,
+        medianprops={"color": "black", "linewidth": 1.8},
+        whiskerprops={"color": "#444444", "linewidth": 1.1},
+        capprops={"color": "#444444", "linewidth": 1.1},
+        flierprops={"marker": "o", "markersize": 4.2, "markerfacecolor": "none", "markeredgecolor": "#333333", "alpha": 0.85},
+    )
+    for patch, strategy in zip(box["boxes"], STRATEGIES):
+        patch.set_facecolor(COLORS[strategy])
+        patch.set_alpha(0.76)
+        patch.set_edgecolor("#333333")
+        patch.set_linewidth(1.0)
+
+    rng = np.random.default_rng(4056)
+    for position, strategy, observations in zip(range(1, len(STRATEGIES) + 1), STRATEGIES, values):
+        jitter = rng.uniform(-0.11, 0.11, len(observations))
+        axis.scatter(position + jitter, observations, s=12, color=COLORS[strategy], alpha=0.25, edgecolor="none", zorder=2)
+
+    axis.set_ylabel("Replication-level mean task delay [min]")
+    axis.set_title("Figure 6. Primary Challenge delay distribution across 50 replications")
+    axis.grid(axis="y", alpha=0.25)
+    figure.text(
+        0.5,
+        0.01,
+        "Box: interquartile range; center line: median; whiskers: 1.5×IQR; open circles: outliers; translucent points: individual replications.",
+        ha="center",
+        fontsize=8.5,
+        color="#333333",
+    )
+    figure.tight_layout(rect=(0, 0.06, 1, 1))
     _save(figure, "Figure6_Final_Replication_Uncertainty")
 
 
