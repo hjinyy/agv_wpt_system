@@ -39,6 +39,8 @@ class V3Sim(V2Sim):
         self.task_index_lookup = task_index_lookup or {t.task_id: i for i, t in enumerate(self.tasks)}
         self.solver_rows = []
         self.milp_schedule_rows = []
+        # C4-only counterfactual records: selection with eta term versus w4=0.
+        self.eta_influence_rows = []
         self.c5_solver_time_s = 0.0
         self.c5_solver_calls = 0
 
@@ -76,8 +78,22 @@ class V3Sim(V2Sim):
                 fr.update({'scenario': self.label, 'strategy': 'C4', 'replication': self.seed,
                            'agv_id': a.agv_id, 'task_id': nt.task_id, 'preview_rank_task': nt.task_id})
                 self.feature_rows.append(fr)
-                scored.append((fr['score'], a))
-            return [a for _, a in sorted(scored, key=lambda x: (-x[0], x[1].agv_id))[:avail_pads]], 'C4'
+                scored.append((fr['score'], fr, a))
+            ordered_with_eta = sorted(scored, key=lambda item: (-item[0], item[2].agv_id))
+            # Exact C4 counterfactual: retain all other feature terms and remove only w4*f_eta.
+            ordered_without_eta = sorted(scored, key=lambda item: (-(item[0] - self.weights['w4'] * item[1]['eta_WPT']), item[2].agv_id))
+            selected_with_eta = tuple(item[2].agv_id for item in ordered_with_eta[:avail_pads])
+            selected_without_eta = tuple(item[2].agv_id for item in ordered_without_eta[:avail_pads])
+            self.eta_influence_rows.append({
+                'scenario': self.label, 'strategy': 'C4', 'replication': self.seed, 'time_s': t,
+                'candidate_count': len(cands), 'available_pads': avail_pads,
+                'contention_event': int(len(cands) > avail_pads),
+                'eta_feature_std': float(np.std([item[1]['eta_WPT'] for item in scored], ddof=0)),
+                'selected_with_eta': '|'.join(map(str, selected_with_eta)),
+                'selected_without_eta': '|'.join(map(str, selected_without_eta)),
+                'eta_term_changed_selection': int(selected_with_eta != selected_without_eta),
+            })
+            return [item[2] for item in ordered_with_eta[:avail_pads]], 'C4'
         if self.strategy == 'C5':
             return self.choose_c5_milp(cands, t, next_task, avail_pads, preview)
         return [], 'none'

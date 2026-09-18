@@ -15,6 +15,22 @@ Final frozen parameters are recorded in `results_final/final_frozen_parameters.j
 - C4: `w1=0.55`, `w2=0.175`, `w3=0.105`, `w4=0.07`, `w5=0.10`
 - C5: `lambda_soc=2.0`, `lambda_task=1.5`, `lambda_kpi=1.5`
 
+## WPT model validation
+
+The SS-compensated geometry model is configured only in `config/wpt_model.yaml`. It uses a nominal 48-V DC-side design assumption and a full-wave/full-bridge FHA load convention:
+
+```text
+R_L,FHA(P_out) = (8/pi^2) * V_dc^2 / P_out
+```
+
+This is a nominal paper-model assumption, not an empirical AGV battery specification. The model recomputes `eta(misalignment, P_out)` for each configured 1/3/5-kW output power; it does not implement a deliverable-power limit because converter/current constraints are not parameterized.
+
+```bash
+AGV_WPT_MPL_CONFIG=/tmp/agv_wpt_mpl MPLCONFIGDIR=/tmp/agv_wpt_mpl .venv/bin/python run_wpt_model_validation.py
+```
+
+Outputs are written to `results/model_validation/`, including Neumann convergence, power-dependent FHA curves, a WPT validation figure, and C4 eta-feature influence diagnostics. This validation entry point does not run rho redesign, C4 retuning, or a new final evaluation.
+
 ## Run the final evaluation
 
 ```bash

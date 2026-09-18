@@ -1,0 +1,20 @@
+# Nominal paper-model assumption; not an empirical AGV specification.
+# SS-compensated WPT under the fundamental-harmonic approximation (FHA).
+coil_geometry:
+  outer_side_m: 0.300
+  inner_side_m: 0.100
+  turns: 15
+  air_gap_m: 0.040
+  segments_per_side: 16
+
+resonant_network:
+  frequency_hz: 85000.0
+  coil_resistance_ohm: 0.150
+
+# The AC-equivalent load uses the full-wave/full-bridge rectifier FHA convention:
+# R_L,FHA = (8/pi^2) R_dc = (8/pi^2) V_dc^2 / P_out.
+dc_side:
+  dc_output_voltage_v: 48.0
+  rated_output_power_kw: 3.0
+  rectifier_fha_factor: 0.8105694691387022  # 8 / pi^2
+  rectifier_convention: full-wave/full-bridge FHA equivalent load

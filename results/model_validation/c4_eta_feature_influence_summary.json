@@ -1,0 +1,16 @@
+{
+  "git_commit": "b8ac79046609bbd08b078624d2a68976244d1b6b",
+  "scenario": "eta_feature_validation_primary",
+  "seed_block": "4007-4056",
+  "purpose": "post-hoc C4 eta-feature decision-mechanics diagnostic; not a new final evaluation",
+  "candidate_decision_events": 67379,
+  "contention_events": 32352,
+  "mean_candidate_eta_feature_std": 0.004202797523805341,
+  "contention_eta_feature_std_mean": 0.008753100097566769,
+  "selection_changed_events": 196,
+  "selection_changed_event_rate_pct": 0.29089182089375026,
+  "contention_selection_changed_events": 196,
+  "contention_selection_changed_rate_pct": 0.6058358061325421,
+  "feature_observations": 123233,
+  "eta_WPT_feature_std_all_observations": 0.017711951453622855
+}

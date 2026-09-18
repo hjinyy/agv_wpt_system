@@ -1,0 +1,10 @@
+{
+  "git_commit": "b8ac79046609bbd08b078624d2a68976244d1b6b",
+  "model": "SS-compensated square-spiral WPT under FHA",
+  "dc_output_voltage_v": 48.0,
+  "rectifier_convention": "full-wave/full-bridge FHA equivalent load",
+  "R_L_FHA_formula": "(8/pi^2) * V_dc^2 / P_out",
+  "rated_output_power_kw": 3.0,
+  "P_deliverable_implemented": false,
+  "P_deliverable_reason": "Source/inverter/coil-current/apparent-power limits are not parameterized."
+}
