@@ -1,0 +1,14 @@
+{
+  "paired_replications": 50,
+  "C4_minus_C3_mean_delay_min": -1.9795855713975141,
+  "C4_minus_C3_mean_urgent_on_time_percentage_points": -0.09057252414133485,
+  "urgent_metric_unit": "percent (0-100); difference reported in percentage points",
+  "C4_urgent_range_percent": [
+    4.615384615384616,
+    17.96690307328605
+  ],
+  "C3_urgent_range_percent": [
+    5.054945054945055,
+    18.2033096926714
+  ]
+}

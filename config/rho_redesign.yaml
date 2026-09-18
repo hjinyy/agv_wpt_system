@@ -10,6 +10,15 @@ c4_four_feature:
   coarse_simplex_step: 0.25
   local_simplex_step: 0.05
 
+c5_revalidation:
+  current_scales: [2.0, 1.5, 1.5]
+  oat_values:
+    lambda_soc: [1.5, 2.0, 2.5]
+    lambda_task: [1.0, 1.5, 2.0]
+    lambda_kpi: [1.0, 1.5, 2.0]
+  horizon_s: 900.0
+  slot_s: 60.0
+
 scenarios:
   base:
     role: non_binding_reference
