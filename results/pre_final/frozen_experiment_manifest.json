@@ -1,7 +1,7 @@
 {
   "manifest_status": "pre-unseen parameters frozen",
   "frozen_experiment_sha": "63bf5d486e061894a29d136272debe738cdb4871",
-  "manifest_generated_from_sha": "63bf5d486e061894a29d136272debe738cdb4871",
+  "manifest_generated_from_sha": "f148800863a22002c3ed10aee6a55fac3e0769b5",
   "final_results_commit_sha": null,
   "wpt_model_version": "config/wpt_model.yaml; SS-FHA power-dependent eta(delta,P)",
   "V_dc_V": 48.0,
