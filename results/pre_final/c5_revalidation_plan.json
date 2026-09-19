@@ -1,0 +1,46 @@
+{
+  "method": "OAT around old scales; not full 27-grid",
+  "candidates": [
+    {
+      "lambda_soc": 2.0,
+      "lambda_task": 1.5,
+      "lambda_kpi": 1.5
+    },
+    {
+      "lambda_soc": 1.5,
+      "lambda_task": 1.5,
+      "lambda_kpi": 1.5
+    },
+    {
+      "lambda_soc": 2.5,
+      "lambda_task": 1.5,
+      "lambda_kpi": 1.5
+    },
+    {
+      "lambda_soc": 2.0,
+      "lambda_task": 1.0,
+      "lambda_kpi": 1.5
+    },
+    {
+      "lambda_soc": 2.0,
+      "lambda_task": 2.0,
+      "lambda_kpi": 1.5
+    },
+    {
+      "lambda_soc": 2.0,
+      "lambda_task": 1.5,
+      "lambda_kpi": 1.0
+    },
+    {
+      "lambda_soc": 2.0,
+      "lambda_task": 1.5,
+      "lambda_kpi": 2.0
+    }
+  ],
+  "scenario_count": 5,
+  "seed_count": 50,
+  "expected_simulations": 1750,
+  "pilot_solver_calls_per_5scenario_seed": 5015,
+  "expected_solver_calls_from_pilot": 1755250,
+  "final_seed_range_used": null
+}
