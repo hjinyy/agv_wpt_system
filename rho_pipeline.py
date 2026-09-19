@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Final
+import time
 
 import numpy as np
 import yaml
@@ -95,8 +96,28 @@ class FourFeatureC4Sim(V3Sim):
     def __init__(self, *args, current_distances: tuple[float, ...], **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.current_distances = current_distances
+        self._priority_latencies_s: list[float] = []
+
+    def metrics(self):
+        metrics = super().metrics()
+        latencies = np.asarray(self._priority_latencies_s, dtype=float)
+        metrics["priority_decisions"] = int(len(latencies))
+        metrics["total_priority_computation_time_s"] = float(latencies.sum())
+        metrics["mean_decision_latency_ms"] = float(latencies.mean() * 1000.0) if len(latencies) else 0.0
+        metrics["p95_decision_latency_ms"] = float(np.quantile(latencies, 0.95) * 1000.0) if len(latencies) else 0.0
+        metrics["max_decision_latency_ms"] = float(latencies.max() * 1000.0) if len(latencies) else 0.0
+        return metrics
 
     def choose(self, cands, t, next_task, avail_pads):
+        """Instrument C4 priority selection without changing ranking or selected actions."""
+        tic = time.perf_counter()
+        try:
+            return self._choose_four_feature(cands, t, next_task, avail_pads)
+        finally:
+            if self.strategy == "C4":
+                self._priority_latencies_s.append(time.perf_counter() - tic)
+
+    def _choose_four_feature(self, cands, t, next_task, avail_pads):
         if self.strategy != "C4":
             return super().choose(cands, t, next_task, avail_pads)
         preview = self.preview_task_map(cands, t, next_task)

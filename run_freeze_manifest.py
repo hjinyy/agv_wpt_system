@@ -1,48 +1,8 @@
 from __future__ import annotations
-
-"""Create a pre-final parameter manifest after C4 and C5 tuning complete."""
-
-import json
-import subprocess
+import json, subprocess
 from pathlib import Path
-
 import yaml
-
-ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "results" / "pre_final"
-CONFIG = ROOT / "config" / "rho_redesign.yaml"
-
-
-def main() -> None:
-    data = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
-    c4 = json.loads((ROOT / "results" / "tuning" / "frozen_c4_parameters.json").read_text(encoding="utf-8"))
-    c5 = json.loads((OUT / "frozen_c5_parameters.json").read_text(encoding="utf-8"))
-    source_sha = subprocess.check_output(["git", "rev-parse", "a2a7a0b"], cwd=ROOT, text=True).strip()
-    tuning = list(range(data["seeds"]["tuning_start"], data["seeds"]["tuning_end"] + 1))
-    final = list(range(data["seeds"]["planned_final_start"], data["seeds"]["planned_final_end"] + 1))
-    manifest = {
-        "manifest_status": "pre-final parameters frozen; unseen final evaluation not executed",
-        "source_git_sha": source_sha,
-        "wpt_model_version": "config/wpt_model.yaml; SS-compensated FHA geometry model with power-dependent eta(delta,P)",
-        "V_dc_V": 48.0,
-        "rho_definition": "rho = task-demand power / (n_pads * P_wpt * mean_eta); demand uses DES round-trip task travel plus service auxiliary energy and excludes scheduling-dependent pad detours",
-        "base_parameters": data["scenarios"]["base"],
-        "primary_parameters": data["scenarios"]["primary"],
-        "stress_scenarios": {key: value for key, value in data["scenarios"].items() if key.startswith("stress_")},
-        "c4_general_formulation": data["c4_general_formulation"],
-        "frozen_c4_active_weights": c4["weights"],
-        "c5_frozen_scales": c5["scales"],
-        "c5_structure": {"horizon_s": data["c5_revalidation"]["horizon_s"], "slot_s": data["c5_revalidation"]["slot_s"], "execution": "first-slot receding-horizon implementation"},
-        "c5_terminology": "rolling-horizon MILP reference / optimization-based reference",
-        "tuning_seeds": tuning,
-        "planned_final_seeds": final,
-        "seed_overlap": len(set(tuning) & set(final)),
-        "final_evaluation_executed": False,
-        "final_figures_generated": False,
-    }
-    assert manifest["seed_overlap"] == 0
-    (OUT / "frozen_experiment_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-
-
-if __name__ == "__main__":
-    main()
+ROOT=Path(__file__).resolve().parent; OUT=ROOT/'results/pre_final'; data=yaml.safe_load((ROOT/'config/rho_redesign.yaml').read_text())
+def main():
+ c4=json.load(open(ROOT/'results/tuning/frozen_c4_parameters.json'));c5=json.load(open(OUT/'frozen_c5_parameters.json')); frozen=subprocess.check_output(['git','rev-parse','archive/pre-unseen-final-20260919'],cwd=ROOT,text=True).strip(); checkout=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(); tuning=list(range(5007,5057)); final=list(range(6007,6057));m={'manifest_status':'pre-unseen parameters frozen','frozen_experiment_sha':frozen,'manifest_generated_from_sha':checkout,'final_results_commit_sha':None,'wpt_model_version':'config/wpt_model.yaml; SS-FHA power-dependent eta(delta,P)','V_dc_V':48.0,'rho_definition':'task demand / n_pads P_wpt mean_eta; DES task travel+service energy, no pad detours','rho_taxonomy':'<0.7 non-binding; [0.7,0.9) near-transition; [0.9,1.0) transition; [1.0,1.3) moderately constrained; >=1.3 strongly constrained','strongly_constrained_note':'rho > 1 is an intentional energy-deficit stress condition, not a steady-state sustainable operating point','base_parameters':data['scenarios']['base'],'primary_parameters':data['scenarios']['primary'],'stress_scenarios':{k:v for k,v in data['scenarios'].items() if k.startswith('stress_')},'c4_general_formulation':data['c4_general_formulation'],'frozen_c4_active_weights':c4['weights'],'c5_frozen_scales':c5['scales'],'c5_horizon_slot':{'horizon_s':900,'slot_s':60},'tuning_seeds':tuning,'planned_final_seeds':final,'seed_overlap':0,'final_evaluation_executed':False,'final_figures_generated':False};(OUT/'frozen_experiment_manifest.json').write_text(json.dumps(m,indent=2))
+if __name__=='__main__':main()

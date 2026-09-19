@@ -521,14 +521,19 @@ class V3Sim(V2Sim):
         m['c1_start_soc'] = self.cfg.get('c1_start_soc', 0.30) if self.strategy == 'C1' else np.nan
         m['c1_target_soc'] = self.cfg.get('c1_target_soc', 0.70) if self.strategy == 'C1' else np.nan
         if self.strategy == 'C5':
-            m['solver_computation_time_s'] = self.c5_solver_time_s
+            m['solver_calls_per_replication'] = self.c5_solver_calls
+            m['solver_total_time_per_replication_s'] = self.c5_solver_time_s
+            m['solver_computation_time_s'] = self.c5_solver_time_s  # legacy alias: replication total, never per-call latency
             m['solver_calls'] = self.c5_solver_calls
             if self.solver_rows:
                 df = pd.DataFrame(self.solver_rows)
-                m['solver_mean_time_s'] = df['solve_time_s'].mean()
+                m['solver_mean_time_s'] = df['solve_time_s'].mean()  # legacy per-call seconds
                 m['solver_median_time_s'] = df['solve_time_s'].median()
                 m['solver_p95_time_s'] = df['solve_time_s'].quantile(0.95)
                 m['solver_max_time_s'] = df['solve_time_s'].max()
+                m['solver_mean_time_per_call_ms'] = float(df['solve_time_s'].mean() * 1000.0)
+                m['solver_p95_time_per_call_ms'] = float(df['solve_time_s'].quantile(0.95) * 1000.0)
+                m['solver_max_time_per_call_ms'] = float(df['solve_time_s'].max() * 1000.0)
                 m['solver_mean_binary_variables'] = df['n_binary'].mean()
                 m['solver_mean_constraints'] = df['n_constraints'].mean()
                 m['solver_mean_available_agv_slot_pairs'] = df.get('available_agv_slot_pairs', pd.Series(dtype=float)).mean()
@@ -542,6 +547,7 @@ class V3Sim(V2Sim):
                 m['solver_task_slack_total'] = df['task_slack_sum'].fillna(0).sum()
             else:
                 for k in ['solver_mean_time_s','solver_median_time_s','solver_p95_time_s','solver_max_time_s',
+                          'solver_mean_time_per_call_ms','solver_p95_time_per_call_ms','solver_max_time_per_call_ms',
                           'solver_mean_binary_variables','solver_mean_constraints','solver_mean_available_agv_slot_pairs',
                           'solver_mean_actual_busy_agv_slot_pairs','solver_mean_forecast_busy_agv_slot_pairs',
                           'solver_infeasible_calls','solver_time_limit_calls',
