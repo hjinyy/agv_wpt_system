@@ -173,7 +173,7 @@ def _scenario_design_markdown(catalog: pd.DataFrame) -> str:
              "Task demand includes DES-consistent round-trip travel and service auxiliary energy; it excludes pad-detour energy because detours are scheduling-dependent.",
              "", "## Catalog", "", view.to_markdown(index=False, floatfmt=".4f"), "",
              "## Selected roles", "", "- **Base** stays at rho << 1 as a non-binding reference.",
-             "- **Primary** is `primary`: 50/60/70/80/90 m, seven AGVs, one 3-kW pad, 90 tasks/h. It has rho in the requested 1.0-1.2 transition/constrained interval while its logistics utilization remains below 1.",
+             "- **Primary** is `primary`: 40/50/60/70/80 m, six AGVs, one 3-kW pad, 90 tasks/h. It has rho about 1.01 while logistics utilization remains below 1.",
              "- The stress catalog covers non-binding, near-transition, transition, moderately constrained, and strongly constrained rho regions. It was selected by rho coverage rather than C4 outcome.", "",
              "The uniform 0-175-mm eight-state misalignment assumption is retained. Mean eta is evaluated from the frozen power-dependent SS-FHA curve for each scenario power."]
     return "\n".join(lines) + "\n"
@@ -205,7 +205,7 @@ def main() -> None:
     _write_csv(OUT / "reference_strategies.csv", sorted(reference_rows, key=lambda row: (str(row["scenario"]), str(row["strategy"]), int(row["replication"]))))
     c3_rows = [row for row in reference_rows if row["strategy"] == "C3"]
 
-    coarse = simplex_grid(float(data["c4_four_feature"]["coarse_simplex_step"]))
+    coarse = simplex_grid(float(data["c4_general_formulation"]["coarse_simplex_step"]))
     coarse_rows = _run_blocks(coarse, "coarse", tuning_names, seeds)
     _write_csv(OUT / "c4_coarse_search.csv", sorted(coarse_rows, key=lambda row: (str(row["weight_id"]), str(row["scenario"]), int(row["replication"]))))
     coarse_pairs = _paired_rows(coarse_rows, c3_rows)
@@ -215,7 +215,7 @@ def main() -> None:
     anchor = coarse_pareto.iloc[0]
     anchor_weights = {name: float(anchor[name]) for name in FEATURES}
 
-    local = _local_neighbors(anchor_weights, float(data["c4_four_feature"]["local_simplex_step"]))
+    local = _local_neighbors(anchor_weights, float(data["c4_general_formulation"]["local_simplex_step"]))
     local_rows = _run_blocks(local, "local", tuning_names, seeds)
     _write_csv(OUT / "c4_local_refinement.csv", sorted(local_rows, key=lambda row: (str(row["weight_id"]), str(row["scenario"]), int(row["replication"]))))
     all_pairs = [*coarse_pairs, *_paired_rows(local_rows, c3_rows)]
@@ -225,7 +225,7 @@ def main() -> None:
     pareto = _pareto(summary)
     chosen = pareto.iloc[0]
     frozen = {name: float(chosen[name]) for name in FEATURES}
-    (OUT / "frozen_c4_parameters.json").write_text(json.dumps({"parameters_frozen_for_unseen_final_evaluation": True, "weights": frozen, "score": data["c4_four_feature"]["score"], "tuning_seeds": list(seeds), "physical_model": "config/wpt_model.yaml"}, indent=2), encoding="utf-8")
+    (OUT / "frozen_c4_parameters.json").write_text(json.dumps({"parameters_frozen_for_unseen_final_evaluation": True, "weights": frozen, "score": data["c4_general_formulation"]["score"], "tuning_seeds": list(seeds), "physical_model": "config/wpt_model.yaml"}, indent=2), encoding="utf-8")
     pareto.to_csv(OUT / "c4_pareto_candidates.csv", index=False)
     (OUT / "C4_TUNING_REPORT.md").write_text(_report(catalog, pareto, chosen, pair_stats, len(coarse), len(local)), encoding="utf-8")
     print("FROZEN_C4", json.dumps(frozen, sort_keys=True), flush=True)

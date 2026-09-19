@@ -67,7 +67,7 @@ def rho_region(rho: float) -> str:
         return "non_binding"
     if rho < 0.9:
         return "near_transition"
-    if rho < 1.1:
+    if rho < 1.0:
         return "transition"
     if rho < 1.3:
         return "moderately_constrained"

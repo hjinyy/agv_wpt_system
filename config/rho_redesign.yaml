@@ -1,17 +1,25 @@
-# Active rho-redesign/tuning source of truth. Physical parameters are in wpt_model.yaml.
+# Active source of truth for the approved 6-AGV rho redesign.
+# Frozen physical parameters are configured separately in wpt_model.yaml.
 seeds:
   tuning_start: 5007
   tuning_end: 5056
   replications: 50
+  planned_final_start: 6007
+  planned_final_end: 6056
 
-c4_four_feature:
+c4_general_formulation:
   feature_names: [soc, next_task_energy, idle, deadline]
   score: "soc*f_SOC + next_task_energy*f_E + idle*f_idle - deadline*f_D"
+  constraints:
+    nonnegative_weights: true
+    weight_sum: 1.0
+    eta_score_feature: false
   coarse_simplex_step: 0.25
   local_simplex_step: 0.05
 
 c5_revalidation:
-  current_scales: [2.0, 1.5, 1.5]
+  reference_scales: [2.0, 1.5, 1.5]
+  # OAT around the old scale: reference plus six changed-scale candidates.
   oat_values:
     lambda_soc: [1.5, 2.0, 2.5]
     lambda_task: [1.0, 1.5, 2.0]
@@ -28,38 +36,14 @@ scenarios:
     wpt_power_kw: 3
     distances_m: [30, 30, 30, 30, 30]
     urgent_ratio: 0.0
-  primary_candidate_current:
-    role: legacy_comparator
-    n_agvs: 5
-    n_pads: 1
-    task_arrival_rate_per_h: 90
-    wpt_power_kw: 3
-    distances_m: [20, 25, 30, 35, 40]
-    urgent_ratio: 0.2
-  primary_candidate_60m:
-    role: candidate
+  primary:
+    role: primary_selected_6agv
     n_agvs: 6
     n_pads: 1
     task_arrival_rate_per_h: 90
     wpt_power_kw: 3
     distances_m: [40, 50, 60, 70, 80]
-    urgent_ratio: 0.2
-  primary_candidate_70m:
-    role: candidate_selected_if_rho_valid
-    n_agvs: 7
-    n_pads: 1
-    task_arrival_rate_per_h: 90
-    wpt_power_kw: 3
-    distances_m: [50, 60, 70, 80, 90]
-    urgent_ratio: 0.2
-  primary_candidate_75m:
-    role: candidate
-    n_agvs: 7
-    n_pads: 1
-    task_arrival_rate_per_h: 90
-    wpt_power_kw: 3
-    distances_m: [55, 65, 75, 85, 95]
-    urgent_ratio: 0.2
+    urgent_ratio: 0.20
   stress_non_binding:
     role: stress
     n_agvs: 5
@@ -67,7 +51,7 @@ scenarios:
     task_arrival_rate_per_h: 75
     wpt_power_kw: 3
     distances_m: [30, 30, 30, 30, 30]
-    urgent_ratio: 0.2
+    urgent_ratio: 0.20
   stress_near_transition:
     role: stress
     n_agvs: 7
@@ -75,31 +59,15 @@ scenarios:
     task_arrival_rate_per_h: 70
     wpt_power_kw: 3
     distances_m: [45, 55, 65, 75, 85]
-    urgent_ratio: 0.2
+    urgent_ratio: 0.20
   stress_transition:
     role: stress
     n_agvs: 7
     n_pads: 1
-    task_arrival_rate_per_h: 87
+    task_arrival_rate_per_h: 80
     wpt_power_kw: 3
     distances_m: [45, 55, 65, 75, 85]
-    urgent_ratio: 0.2
-  stress_moderately_constrained:
-    role: stress
-    n_agvs: 7
-    n_pads: 1
-    task_arrival_rate_per_h: 90
-    wpt_power_kw: 3
-    distances_m: [50, 60, 70, 80, 90]
-    urgent_ratio: 0.2
-  primary:
-    role: primary_selected
-    n_agvs: 7
-    n_pads: 1
-    task_arrival_rate_per_h: 90
-    wpt_power_kw: 3
-    distances_m: [50, 60, 70, 80, 90]
-    urgent_ratio: 0.2
+    urgent_ratio: 0.20
   stress_strongly_constrained:
     role: stress
     n_agvs: 8
@@ -107,6 +75,6 @@ scenarios:
     task_arrival_rate_per_h: 105
     wpt_power_kw: 3
     distances_m: [55, 65, 75, 85, 95]
-    urgent_ratio: 0.2
+    urgent_ratio: 0.20
 
 tuning_scenarios: [stress_non_binding, stress_near_transition, stress_transition, primary, stress_strongly_constrained]

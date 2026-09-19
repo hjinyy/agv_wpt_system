@@ -1,4 +1,4 @@
-from rho_pipeline import FEATURES, FourFeatureC4Sim, configuration_for, scenario_catalog_rows, scenarios, tuning_seeds
+from rho_pipeline import FEATURES, FourFeatureC4Sim, configuration_for, load_experiment_config, scenario_catalog_rows, scenarios, tuning_seeds
 from run_rho_tuning import simplex_grid
 from v2_runner import generate_common
 
@@ -18,10 +18,14 @@ def test_four_feature_c4_score_is_eta_independent():
 
 
 def test_rho_catalog_covers_each_requested_operating_region():
-    rows = scenario_catalog_rows()
-    regions = {row["rho_region"] for row in rows if row["scenario"].startswith("stress_")}
+    data = load_experiment_config()
+    rows = {row["scenario"]: row for row in scenario_catalog_rows(data)}
+    regions = {rows[name]["rho_region"] for name in data["tuning_scenarios"]}
 
     assert {"non_binding", "near_transition", "transition", "moderately_constrained", "strongly_constrained"}.issubset(regions)
+    assert 1.0 <= float(rows["primary"]["rho_analytical"]) <= 1.2
+    assert rows["primary"]["rho_region"] == "moderately_constrained"
+    assert all(float(row["logistics_utilization"]) < 1.0 for row in rows.values())
 
 
 def test_tuning_seed_block_is_new_and_has_50_replications():
