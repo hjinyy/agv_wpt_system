@@ -1,34 +1,37 @@
-# WPT Model Validation
+# WPT Model and 50-W Prototype Validation
 
-## R_L provenance status
-- Repository/history search found no explicit historical 48-V, DC-output-voltage, or rectifier/FHA-load derivation.
-- The former hard-coded `0.623 ohm` is **consistent with** (not proven to be originally documented as) a 48-V, 3-kW DC load under the full-wave/full-bridge FHA convention:
-  `R_L,FHA = (8/pi^2) R_dc = (8/pi^2) V_dc^2 / P_out`.
-- `48 V` is now an explicit nominal DC-side paper-model assumption in `config/wpt_model.yaml`; it is not claimed as an empirical AGV specification.
+## Final DES model
+- Final DES uses `P_charge(t) = 3 kW × eta(delta_t)` at nominal 3-kW SS-FHA matched operation.
+- With `V_dc = 48 V`, `R_L,FHA = (8/pi^2) V_dc^2 / 3,000 = 0.622517 ohm`.
+- The modeled chain is power supply → inverter → Tx → Rx → rectifier → DC link → CCCV buck → battery.
+- CCCV duty regulation is simplified as a near-matched resonant-link assumption across the DES charging range; it is not a claim of constant efficiency at every output power.
 
-## Scope boundary
-- This model computes `eta(delta, P_out)` only. It does not implement `P_deliverable`; source/inverter/current/apparent-power limits are unavailable.
+## Unseen-final provenance check
+- All frozen final scenarios use 3 kW: `True`.
+- Frozen runner routes eta through physical callback: `True`; frozen callback reads configured pad power: `True`.
+- Raw final mean efficiencies lie within nominal 3-kW eta(delta) range: `True`.
+- 1-kW/5-kW curves were absent from final scenario configuration: `True`.
+- **Final unseen numerical results remain valid: True.**
 
-## R_L,FHA and efficiency sanity values
-| P_out [kW] | delta [mm] | M [uH] | kappa | kappa Q | R_L,FHA [ohm] | eta [%] |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | 0 | 28.13385 | 0.507706 | 100.170 | 1.867552 | 92.4413 |
-| 1 | 75 | 19.94582 | 0.359944 | 71.017 | 1.867552 | 92.3190 |
-| 1 | 175 | 3.06158 | 0.055250 | 10.901 | 1.867552 | 83.1528 |
-| 3 | 0 | 28.13385 | 0.507706 | 100.170 | 0.622517 | 80.5416 |
-| 3 | 75 | 19.94582 | 0.359944 | 71.017 | 0.622517 | 80.5008 |
-| 3 | 175 | 3.06158 | 0.055250 | 10.901 | 0.622517 | 77.2354 |
-| 5 | 0 | 28.13385 | 0.507706 | 100.170 | 0.373510 | 71.3225 |
-| 5 | 75 | 19.94582 | 0.359944 | 71.017 | 0.373510 | 71.2979 |
-| 5 | 175 | 3.06158 | 0.055250 | 10.901 | 0.373510 | 69.3115 |
+## Nominal 3-kW eta(delta)
+| Lateral misalignment [mm] | eta [%] |
+| ---: | ---: |
+| 0 | 80.5416 |
+| 25 | 80.5381 |
+| 50 | 80.5264 |
+| 75 | 80.5008 |
+| 100 | 80.4451 |
+| 125 | 80.3072 |
+| 150 | 79.8583 |
+| 175 | 77.2354 |
 
-## Neumann convergence
-- At 16 segments/side, maximum absolute M error versus the 64-segment reference across 0/75/175 mm is 0.1947%.
+## 50-W prototype: qualitative experimental validation anchor
+- The matched sweep demonstrates that load-regulated operating points can retain approximately 80% or higher efficiency near the matched region and decline away from it.
+- Air-gap X is plotted separately from the matched operating-point sweep.
+- The prototype does **not** validate 3-kW absolute efficiency, is not directly scaled to 3 kW, and is not claimed to quantitatively match the analytical model.
 
-## C4 eta-feature influence diagnostic
-- Candidate decision events: 67379; contention events: 32352.
-- Mean within-event normalized eta-feature standard deviation: 0.004203; among contention events: 0.008753.
-- Removing only the eta term changes selected AGV(s) in 196 events (0.2909%), and 196 contention events (0.6058%).
-
-## Decision
-- This report records measured influence only; it does not retune weights or change C4 feature count. A 5-feature versus 4-feature decision must be made after reviewing the recorded rates.
+## Limitations
+- Detailed CCCV switching and control dynamics are not modeled.
+- Effective-load regulation is reduced to a near-matched operating assumption.
+- The prototype is 50 W whereas the DES pad is 3 kW.
+- The prototype is qualitative validation only.

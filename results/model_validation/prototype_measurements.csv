@@ -1,0 +1,9 @@
+condition,label,pin_w,pout_w,efficiency_pct,matched_sweep
+air_gap_X,Air-gap X,29.065,16.237,55.86,false
+matched,Full match,14.983,11.980,79.96,true
+minus_2w,Matched point - 2 W,12.816,10.373,80.94,true
+minus_4w,Matched point - 4 W,10.274,8.807,85.72,true
+minus_6w,Matched point - 6 W,8.756,6.581,75.16,true
+minus_8w,Matched point - 8 W,6.826,4.843,70.94,true
+minus_10w,Matched point - 10 W,4.790,3.042,63.50,true
+minus_12w,Matched point - 12 W,3.044,1.147,37.69,true

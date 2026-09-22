@@ -1,0 +1,25 @@
+{
+  "frozen_parameters_sha": "63bf5d486e061894a29d136272debe738cdb4871",
+  "final_execution_code_sha": "f148800863a22002c3ed10aee6a55fac3e0769b5",
+  "all_frozen_final_scenarios_nominal_3kw": true,
+  "frozen_runner_uses_physical_efficiency_callback": true,
+  "frozen_callback_uses_configuration_wpt_power": true,
+  "raw_final_mean_eta_within_nominal_3kw_curve_range": true,
+  "one_kw_or_five_kw_not_configured_for_final_scenarios": true,
+  "final_raw_rows": 1500,
+  "nominal_3kw_eta_values": [
+    0.8054162104071634,
+    0.8053813663769002,
+    0.8052636221856643,
+    0.8050075549590425,
+    0.8044510172804178,
+    0.8030722450112395,
+    0.7985830698459259,
+    0.7723540894197213
+  ],
+  "nominal_3kw_eta_min_max": [
+    0.7723540894197213,
+    0.8054162104071634
+  ],
+  "final_unseen_numerical_results_remain_valid": true
+}

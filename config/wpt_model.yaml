@@ -11,10 +11,15 @@ resonant_network:
   frequency_hz: 85000.0
   coil_resistance_ohm: 0.150
 
-# The AC-equivalent load uses the full-wave/full-bridge rectifier FHA convention:
-# R_L,FHA = (8/pi^2) R_dc = (8/pi^2) V_dc^2 / P_out.
 dc_side:
   dc_output_voltage_v: 48.0
   rated_output_power_kw: 3.0
   rectifier_fha_factor: 0.8105694691387022  # 8 / pi^2
   rectifier_convention: full-wave/full-bridge FHA equivalent load
+  nominal_matched_load_ohm: 0.6225173523  # (8/pi^2) * 48^2 / 3000
+
+final_des_assumption:
+  topology: power_supply -> inverter -> Tx -> Rx -> rectifier -> DC_link -> CCCV_buck -> battery
+  eta_model: eta(delta) at nominal 3-kW SS-FHA matched operation
+  load_regulation: CCCV duty regulation is simplified as near-matched resonant-link operation over the DES charging range.
+  out_of_scope: Detailed CCCV switching/control dynamics and an explicit effective-load trajectory are not modeled.

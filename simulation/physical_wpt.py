@@ -3,13 +3,17 @@ from __future__ import annotations
 """SS-compensated square-spiral WPT model under the fundamental-harmonic approximation.
 
 The nominal DC side is a paper-model design assumption, not an empirical AGV specification.
-For the full-wave/full-bridge rectifier convention used here, the equivalent AC load is
-``R_L,FHA = (8/pi^2) R_dc = (8/pi^2) V_dc^2 / P_out``.  Consequently it is
-recomputed for every requested output power; no fixed AC-equivalent load is reused
-across the 1/3/5 kW study.
+The generic evaluator can compute an FHA curve for a requested output power using
+``R_L,FHA = (8/pi^2) R_dc = (8/pi^2) V_dc^2 / P_out``.  Such arbitrary-power sweeps
+are retained only as historical/model-development diagnostics.
 
-This model returns efficiency only.  It does not model source/inverter/current/apparent-power
-limits and must not be interpreted as a deliverable-power-limit model.
+The final DES callback is instead fixed to the nominal 3-kW matched condition and uses
+``eta(delta)``. It represents CCCV load regulation through a near-matched resonant-link
+assumption, not through a direct fixed-load ``R_L ∝ 1/P_out`` trajectory.
+
+This model returns efficiency only. It does not model source/inverter/current/apparent-power
+limits or detailed CCCV switching/control dynamics and must not be interpreted as a
+deliverable-power-limit model.
 """
 
 from dataclasses import dataclass

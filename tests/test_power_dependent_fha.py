@@ -29,9 +29,11 @@ def test_efficiency_curve_recomputes_load_for_requested_power():
     assert not np.allclose(one_kw.efficiency, five_kw.efficiency)
 
 
-def test_final_wpt_efficiency_callback_follows_des_power_configuration():
-    eta_one_kw = physical_efficiency_values({"wpt_power_kw": 1.0})
-    eta_five_kw = physical_efficiency_values({"wpt_power_kw": 5.0})
-
-    assert eta_one_kw.shape == eta_five_kw.shape
-    assert not np.allclose(eta_one_kw, eta_five_kw)
+def test_final_wpt_efficiency_callback_is_fixed_to_nominal_3kw():
+    eta = physical_efficiency_values({"wpt_power_kw": 3.0})
+    assert eta.shape == (8,)
+    import pytest
+    with pytest.raises(ValueError, match="3-kW"):
+        physical_efficiency_values({"wpt_power_kw": 1.0})
+    with pytest.raises(ValueError, match="3-kW"):
+        physical_efficiency_values({"wpt_power_kw": 5.0})

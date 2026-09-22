@@ -1,6 +1,6 @@
-# AGV-WPT DES: 6-AGV Pre-final Freeze
+# AGV-WPT DES: 6-AGV Final Unseen Package
 
-This repository contains the approved **rho-based 6-AGV Primary** experiment package. The WPT physical model, C4 rule, and C5 objective scales are frozen for a separately authorized unseen evaluation. That unseen evaluation and all final paper figures remain **unexecuted**.
+This repository contains the approved rho-based 6-AGV Primary experiment package and its single completed unseen evaluation (`6007–6056`). Do **not** rerun the unseen block.
 
 ## Frozen Primary Challenge
 
@@ -8,12 +8,25 @@ This repository contains the approved **rho-based 6-AGV Primary** experiment pac
 AGVs: 6
 Distances: 40 / 50 / 60 / 70 / 80 m
 Pads: 1
-WPT nominal output power: 3 kW
+WPT nominal pad: 3 kW
 Task arrival rate: 90 tasks/h
 Urgent-task ratio: 0.20
 rho analytical: approximately 1.01
 logistics utilization: approximately 0.875
 ```
+
+## Final WPT model
+
+The final DES uses a nominal **3-kW**, 48-V SS-FHA matched operating condition:
+
+```text
+P_charge(t) = 3 kW × eta(delta_t)
+R_L,FHA = (8/pi²) × 48² / 3000 = 0.622517 ohm
+```
+
+The modeled chain is power supply → inverter → Tx coil → Rx coil → rectifier → DC-link capacitor → CCCV buck converter → battery. CCCV duty regulation is represented by a **near-matched resonant-link assumption** over the DES charging range. This does not claim constant efficiency at all output powers or model detailed converter switching/control dynamics.
+
+The generic 1/3/5-kW FHA sweeps are historical/model-development diagnostics only; they are not final-paper curves or final-DES inputs. The 50-W prototype is a **qualitative experimental validation anchor**, not an absolute 3-kW validation or a scale-up dataset.
 
 ## Active strategy terminology
 
@@ -23,42 +36,27 @@ logistics utilization: approximately 0.875
 - C4: **SOC-deadline risk priority** / robust charging-priority heuristic
 - C5: **rolling-horizon MILP reference** / optimization-based reference
 
-C4 candidate formulation is:
-
 ```text
-S_i = w_SOC f_SOC + w_E f_E + w_idle f_idle - w_D f_D
+C4: S_i = 0.75 f_SOC - 0.25 f_D
+C5: lambda_soc = 2.0, lambda_task = 1.5, lambda_kpi = 2.0
 ```
 
-with non-negative weights summing to one. WPT efficiency is deliberately excluded from the C4 score and retained only in the physical charging/SOC/loss model. The robustly selected active C4 rule is:
+## Final results and validation
 
-```text
-S_i = 0.75 f_SOC - 0.25 f_D
-```
+- `results/final_unseen/` — one-time unseen raw/summary/statistics/final figures
+- `results/model_validation/WPT_MODEL_VALIDATION.md` — nominal-model and 50-W prototype scope
+- `results/model_validation/Figure5_WPT_Model_and_Prototype_Validation.pdf` — final Figure 5
+- `results/model_validation/final_unseen_nominal_3kw_regression.json` — non-rerun validity check
 
-The zero next-task-energy and idle weights are a tuning result, not a hard override.
+## Limitations
 
-## Frozen artifacts
-
-- `results/tuning/frozen_c4_parameters.json`
-- `results/pre_final/frozen_c5_parameters.json`
-- `results/pre_final/frozen_experiment_manifest.json`
-- `results/tuning/SCENARIO_DESIGN.md`
-- `results/pre_final/C5_REVALIDATION_REPORT.md`
-
-## Reproducibility entry points
-
-```bash
-AGV_WPT_MPL_CONFIG=/tmp/agv_wpt_mpl MPLCONFIGDIR=/tmp/agv_wpt_mpl .venv/bin/python run_wpt_model_validation.py
-AGV_WPT_MPL_CONFIG=/tmp/agv_wpt_mpl MPLCONFIGDIR=/tmp/agv_wpt_mpl .venv/bin/python run_rho_tuning.py
-AGV_WPT_MPL_CONFIG=/tmp/agv_wpt_mpl MPLCONFIGDIR=/tmp/agv_wpt_mpl .venv/bin/python run_c5_revalidation.py
-.venv/bin/python run_freeze_manifest.py
-.venv/bin/python run_pre_final_integrity.py
-.venv/bin/python -m pytest -q
-```
-
-The tuning/revalidation commands use CRN seeds `5007–5056`. The planned unseen final block is `6007–6056`, with overlap zero. Do not run `final_evaluation.py` or `generate_final_figures.py` until separately approved.
+- Detailed CCCV switching and control dynamics are not modeled.
+- Effective-load regulation is simplified to near-matched operation.
+- The prototype is 50 W while the DES pad is 3 kW.
+- Prototype evidence is qualitative only.
 
 ## Archives
 
 - Pre-rho redesign: `archive/pre-rho-redesign-20260917` at `b8ac79046609bbd08b078624d2a68976244d1b6b`
-- Pre-6-AGV Primary state: `archive/pre-6agv-primary-freeze-20260919` at `71aa37dc69b1d8e388b28e452a53591ed8089623`
+- Pre-6-AGV Primary: `archive/pre-6agv-primary-freeze-20260919` at `71aa37dc69b1d8e388b28e452a53591ed8089623`
+- Pre-unseen final: `archive/pre-unseen-final-20260919` at `63bf5d486e061894a29d136272debe738cdb4871`
