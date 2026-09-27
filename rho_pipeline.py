@@ -114,6 +114,7 @@ class FourFeatureC4Sim(V3Sim):
         super().__init__(*args, **kwargs)
         self.current_distances = current_distances
         self._priority_latencies_s: list[float] = []
+        self.physical_feature_diagnostic_rows: list[dict[str, object]] = []
 
     def metrics(self):
         metrics = super().metrics()
@@ -152,8 +153,13 @@ class FourFeatureC4Sim(V3Sim):
             row.update({"scenario": self.label, "strategy": "C4", "replication": self.seed, "agv_id": agv.agv_id,
                         "task_id": task.task_id, "preview_rank_task": task.task_id})
             self.feature_rows.append(row)
-            scored.append((row["score"], agv))
-        return [agv for _, agv in sorted(scored, key=lambda item: (-item[0], item[1].agv_id))[:avail_pads]], "C4-5feature"
+            scored.append((row["score"], row, agv))
+        selected_full = tuple(item[2].agv_id for item in sorted(scored, key=lambda item: (-item[0], item[2].agv_id))[:avail_pads])
+        weights = self.cfg["c4_five_feature_weights"]
+        selected_without_p = tuple(item[2].agv_id for item in sorted(scored, key=lambda item: (-(item[0] - weights["charging_power_quality"] * item[1]["f_P"]), item[2].agv_id))[:avail_pads])
+        p_values = [item[1]["f_P"] for item in scored]
+        self.physical_feature_diagnostic_rows.append({"scenario": self.label, "replication": self.seed, "time_s": t, "candidate_count": len(cands), "available_pads": avail_pads, "contention_event": int(len(cands) > avail_pads), "f_P_std": float(np.std(p_values)), "f_P_range": float(np.ptp(p_values)), "selected_full": "|".join(map(str, selected_full)), "selected_without_P": "|".join(map(str, selected_without_p)), "p_term_changed_selection": int(selected_full != selected_without_p)})
+        return [item[2] for item in sorted(scored, key=lambda item: (-item[0], item[2].agv_id))[:avail_pads]], "C4-5feature"
 
 
 def rho_region(rho: float) -> str:

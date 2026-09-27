@@ -459,7 +459,8 @@ class V3Sim(V2Sim):
             for a, p in zip(chosen, avail):
                 nt = self.preview_task_map([a], t, next_task).get(a.agv_id, next_task)
                 start = max(t, p.available); wait = max(0, p.available - t); a.charge_wait_s += wait; p.wait_s += wait
-                ts = self.detour(a, start); eta = self.eta(nt, a, mode=self.realized_eta_mode); power = self.charging_power_kw(nt, a, mode=self.realized_eta_mode, pad_id=p.pad_id); dur = min(q, max(0, next_arrival - ts))
+                ts = self.detour(a, start); predicted = self.wpt_condition(nt, a, mode=self.predicted_eta_mode, pad_id=p.pad_id); realized = self.wpt_condition(nt, a, mode=self.realized_eta_mode, pad_id=p.pad_id); eta = realized.eta; power = realized.charge_power_kw; dur = min(q, max(0, next_arrival - ts))
+                self.wpt_condition_rows.append({'scenario': self.label, 'strategy': self.strategy, 'replication': self.seed, 'agv_id': a.agv_id, 'pad_id': p.pad_id, 'predicted_delta_mm': predicted.delta_mm, 'realized_delta_mm': realized.delta_mm, 'predicted_charge_power_kw': predicted.charge_power_kw, 'realized_charge_power_kw': realized.charge_power_kw, 'realized_eta': realized.eta, 'near_zero_opportunity': int(realized.charge_power_kw <= 0.05)})
                 actual, _, _ = self.charge_amount(a, p, ts, dur, eta, mandatory=False, charge_power_kw=power)
                 a.available = ts + actual; p.available = a.available
                 if actual <= 0: self.deferred += 1
@@ -524,6 +525,16 @@ class V3Sim(V2Sim):
         m = super().metrics()
         m['c1_start_soc'] = self.cfg.get('c1_start_soc', 0.30) if self.strategy == 'C1' else np.nan
         m['c1_target_soc'] = self.cfg.get('c1_target_soc', 0.70) if self.strategy == 'C1' else np.nan
+        if self.wpt_condition_rows:
+            conditions = pd.DataFrame(self.wpt_condition_rows)
+            m['mean_realized_charge_power_kw'] = float(conditions['realized_charge_power_kw'].mean())
+            m['mean_predicted_charge_power_kw'] = float(conditions['predicted_charge_power_kw'].mean())
+            m['near_zero_charging_opportunities'] = int(conditions['near_zero_opportunity'].sum())
+            m['prediction_charge_power_mae_kw'] = float((conditions['predicted_charge_power_kw'] - conditions['realized_charge_power_kw']).abs().mean())
+            m['prediction_charge_power_rmse_kw'] = float(np.sqrt(((conditions['predicted_charge_power_kw'] - conditions['realized_charge_power_kw']) ** 2).mean()))
+            m['prediction_charge_power_bias_kw'] = float((conditions['predicted_charge_power_kw'] - conditions['realized_charge_power_kw']).mean())
+        else:
+            for key in ('mean_realized_charge_power_kw','mean_predicted_charge_power_kw','near_zero_charging_opportunities','prediction_charge_power_mae_kw','prediction_charge_power_rmse_kw','prediction_charge_power_bias_kw'): m[key] = 0.0
         if self.strategy == 'C5':
             m['solver_calls_per_replication'] = self.c5_solver_calls
             m['solver_total_time_per_replication_s'] = self.c5_solver_time_s

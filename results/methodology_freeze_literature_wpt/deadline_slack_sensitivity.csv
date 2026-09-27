@@ -1,0 +1,10 @@
+urgent_slack_s,normal_slack_s,structurally_feasible,urgency_separation_s,selection_status
+180.0,360.0,True,180.0,sensitivity_only
+180.0,480.0,True,300.0,sensitivity_only
+180.0,600.0,True,420.0,sensitivity_only
+240.0,360.0,True,120.0,sensitivity_only
+240.0,480.0,True,240.0,selected
+240.0,600.0,True,360.0,sensitivity_only
+300.0,360.0,True,60.0,sensitivity_only
+300.0,480.0,True,180.0,sensitivity_only
+300.0,600.0,True,300.0,sensitivity_only

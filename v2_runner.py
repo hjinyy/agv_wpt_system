@@ -87,7 +87,7 @@ class V2Sim:
         self.op=self.cfg['operation_hours']*3600; self.agvs=[V2AGV(i+1,float(init[i])) for i in range(self.cfg['n_agvs'])]
         for a in self.agvs: a.record(0)
         self.pads=[V2Pad(i+1) for i in range(self.cfg['n_pads'])]
-        self.task_rows=[]; self.feature_rows=[]; self.decision_rows=[]; self.contention_events=0; self.diff_decisions=0; self.deferred=0; self.max_queue=0
+        self.task_rows=[]; self.feature_rows=[]; self.decision_rows=[]; self.wpt_condition_rows=[]; self.contention_events=0; self.diff_decisions=0; self.deferred=0; self.max_queue=0
         self.weights={k:v/sum(self.cfg['weights'].values()) for k,v in self.cfg['weights'].items()}
     def wpt_condition(self, task, agv, mode=None, pad_id=None):
         mode = mode or self.realized_eta_mode
