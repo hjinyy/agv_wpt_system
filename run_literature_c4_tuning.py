@@ -37,7 +37,7 @@ def pareto(s):
  return valid.loc[keep].sort_values(['worst_delay_degradation','mean_delay_diff','worst_urgent_degradation','mean_urgent_diff'],ascending=[True,True,False,False])
 def parallel_runs(jobs, capture=False):
  rows=[]
- with ProcessPoolExecutor(max_workers=12) as ex:
+ with ProcessPoolExecutor(max_workers=16) as ex:
   fs=[ex.submit(run_one,*j,capture) for j in jobs]
   for i,f in enumerate(as_completed(fs),1):
    rows.append(f.result())

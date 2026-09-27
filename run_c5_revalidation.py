@@ -112,7 +112,7 @@ def main() -> None:
     print("C5_PLAN", json.dumps(plan, sort_keys=True), flush=True)
     jobs = [(scenario, scales, seed) for scales in candidates for scenario in names for seed in seeds]
     rows: list[dict[str, object]] = []
-    with ProcessPoolExecutor(max_workers=4) as pool:
+    with ProcessPoolExecutor(max_workers=12) as pool:
         futures = [pool.submit(_run_one, scenario, scales, seed) for scenario, scales, seed in jobs]
         for complete, future in enumerate(as_completed(futures), 1):
             rows.append(future.result())
