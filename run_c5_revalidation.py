@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""C5 OAT robust revalidation for the approved rho catalog; never uses final seeds."""
+"""C5 OAT robust revalidation under literature WPT conditions; never uses reserved final seeds."""
 
 import csv
 import json
@@ -13,17 +13,11 @@ import pandas as pd
 import v2_runner
 import v3_runner
 from rho_pipeline import FEATURES, configuration_for, load_experiment_config, scenarios, tuning_seeds
-from simulation.final_wpt import physical_efficiency_values
 from v2_runner import generate_common
 from v3_runner import V3Sim
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "results" / "pre_final"
-
-
-def _physical_callback() -> None:
-    v2_runner.eta_values = physical_efficiency_values
-    v3_runner.eta_values = physical_efficiency_values
+OUT = ROOT / "results" / "pre_final_literature_wpt"
 
 
 def scale_id(scales: dict[str, float]) -> str:
@@ -43,15 +37,14 @@ def oat_candidates(data: dict | None = None) -> list[dict[str, float]]:
 
 
 def _run_one(scenario_name: str, scales: dict[str, float], seed: int) -> dict[str, object]:
-    _physical_callback()
     scenario = scenarios()[scenario_name]
-    config = configuration_for(scenario, {feature: 0.25 for feature in FEATURES})
+    config = configuration_for(scenario, {feature: 1.0 / len(FEATURES) for feature in FEATURES})
     config.update({"c5_lambda_soc": scales["lambda_soc"], "c5_lambda_task": scales["lambda_task"], "c5_lambda_kpi": scales["lambda_kpi"]})
     try:
         tasks, initial = generate_common(config, seed, distances=scenario.distances, urgent_ratio=scenario.urgent_ratio)
         lookup = {task.task_id: index for index, task in enumerate(tasks)}
         simulation = V3Sim(config, "C5", seed, tasks, initial, scenario_name, variable_eta=True, task_index_lookup=lookup,
-                           predicted_eta_mode="variable", realized_eta_mode="variable")
+                           predicted_eta_mode="predicted", realized_eta_mode="realized")
         result = simulation.run()
         result.update({"scale_id": scale_id(scales), **scales, "simulation_failure": 0, "error": ""})
         return result
@@ -113,10 +106,8 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     data = load_experiment_config(); seeds = tuning_seeds(data); names = list(data["tuning_scenarios"]); candidates = oat_candidates(data)
     expected_runs = len(candidates) * len(names) * len(seeds)
-    pilot_calls = 5015  # measured with old scales for one seed across all five scenarios in the approved pre-final audit
-    plan = {"method": "OAT around old scales; not full 27-grid", "candidates": candidates, "scenario_count": len(names), "seed_count": len(seeds),
-            "expected_simulations": expected_runs, "pilot_solver_calls_per_5scenario_seed": pilot_calls,
-            "expected_solver_calls_from_pilot": pilot_calls * len(candidates) * len(seeds), "final_seed_range_used": None}
+    plan = {"method": "OAT around historical starting scales under frozen literature conditions; not full 27-grid", "candidates": candidates, "scenario_count": len(names), "seed_count": len(seeds),
+            "expected_simulations": expected_runs, "final_seed_range_used": None}
     (OUT / "c5_revalidation_plan.json").write_text(json.dumps(plan, indent=2), encoding="utf-8")
     print("C5_PLAN", json.dumps(plan, sort_keys=True), flush=True)
     jobs = [(scenario, scales, seed) for scales in candidates for scenario in names for seed in seeds]

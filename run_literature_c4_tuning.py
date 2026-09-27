@@ -35,11 +35,18 @@ def pareto(s):
  for i,x in enumerate(v):
   nw=(v[:,0]<=x[0])&(v[:,1]<=x[1])&(v[:,2]>=x[2])&(v[:,3]>=x[3])&(v[:,4]>=x[4])&(v[:,5]>=x[5]);st=(v[:,0]<x[0])|(v[:,1]<x[1])|(v[:,2]>x[2])|(v[:,3]>x[3])|(v[:,4]>x[4])|(v[:,5]>x[5]);keep.append(not bool((nw&st).any()))
  return valid.loc[keep].sort_values(['worst_delay_degradation','mean_delay_diff','worst_urgent_degradation','mean_urgent_diff'],ascending=[True,True,False,False])
+def parallel_runs(jobs, capture=False):
+ rows=[]
+ with ProcessPoolExecutor(max_workers=12) as ex:
+  fs=[ex.submit(run_one,*j,capture) for j in jobs]
+  for i,f in enumerate(as_completed(fs),1):
+   rows.append(f.result())
+   if i%100==0 or i==len(fs):print(f'RUN {i}/{len(fs)}',flush=True)
+ return rows
+
 def run_grid(candidates,phase,names,seeds):
- jobs=[(n,s,'C4',w,False) for w in candidates for n in names for s in seeds];rows=[]
- with ProcessPoolExecutor(max_workers=4) as ex:
-  fs=[ex.submit(run_one,*j) for j in jobs]
-  for i,f in enumerate(as_completed(fs),1):rows.append(f.result()[0]);print(f'{phase} {i}/{len(fs)}',flush=True)
+ jobs=[(n,s,'C4',w) for w in candidates for n in names for s in seeds];rows=[]
+ for m,_,_,_,_ in parallel_runs(jobs): rows.append(m)
  for r in rows:r['phase']=phase
  return rows
 def renormalize_without(w,key):
@@ -49,9 +56,7 @@ def main():
  OUT.mkdir(parents=True);data=load_experiment_config();seeds=tuning_seeds(data);names=list(data['tuning_scenarios']);assert seeds==tuple(range(7107,7157));assert not set(seeds)&set(range(8007,8057))
  pd.DataFrame(scenario_catalog_rows(data)).to_csv(OUT/'frozen_rho_catalog.csv',index=False)
  refs=[]
- for st in ('C1','C2','C3'):
-  for n in names:
-   for s in seeds: refs.append(run_one(n,s,st)[0])
+ for m,_,_,_,_ in parallel_runs([(n,s,st,None) for st in ('C1','C2','C3') for n in names for s in seeds]): refs.append(m)
  write('reference_strategies.csv',refs);c3=[r for r in refs if r['strategy']=='C3']
  coarse=simplex_grid(.25);coarse_rows=run_grid(coarse,'coarse',names,seeds);write('c4_coarse_search.csv',coarse_rows);cp=paired(coarse_rows,c3);write('c4_coarse_paired.csv',cp);cs=summary(cp);cs.to_csv(OUT/'c4_coarse_candidates.csv',index=False);anchor=pareto(cs).iloc[0];local=_local_neighbors({k:float(anchor[k]) for k in FEATURES},.05);local_rows=run_grid(local,'local',names,seeds);write('c4_local_refinement.csv',local_rows);lp=paired(local_rows,c3);allp=cp+lp;write('c4_paired_statistics_raw.csv',allp);summ=summary(allp);summ.to_csv(OUT/'c4_candidates.csv',index=False);front=pareto(summ);front.to_csv(OUT/'c4_pareto_candidates.csv',index=False);chosen=front.iloc[0];w={k:float(chosen[k]) for k in FEATURES};(OUT/'frozen_c4_parameters.json').write_text(json.dumps({'weights':w,'score':data['c4_general_formulation']['score'],'tuning_seeds':list(seeds),'selection':'hard safety rejection then six-KPI Pareto robustness'},indent=2))
  # diagnostic/ablation reruns on tuning block only
