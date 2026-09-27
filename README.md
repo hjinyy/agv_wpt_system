@@ -1,62 +1,55 @@
-# AGV-WPT DES: 6-AGV Final Unseen Package
+# AGV-WPT DES: [3]-Based Experimental WPT-Condition Redesign
 
-This repository contains the approved rho-based 6-AGV Primary experiment package and its single completed unseen evaluation (`6007–6056`). Do **not** rerun the unseen block.
-
-## Frozen Primary Challenge
+`main` is now the pre-tuning implementation of a major research revision. The prior nominal 3-kW SS-FHA package—including its 6-AGV Primary, C4/C5 parameters, 6007–6056 unseen evaluation, figures, and prototype validation—is preserved intact at:
 
 ```text
-AGVs: 6
-Distances: 40 / 50 / 60 / 70 / 80 m
-Pads: 1
-WPT nominal pad: 3 kW
-Task arrival rate: 90 tasks/h
-Urgent-task ratio: 0.20
-rho analytical: approximately 1.01
-logistics utilization: approximately 0.875
+archive/pre-literature-wpt-redesign-20260927
+7cfa5ddcf695e09c363a98e1a749072a02d998aa
 ```
 
-## Final WPT model
+## Active physical source
 
-The final DES uses a nominal **3-kW**, 48-V SS-FHA matched operating condition:
+The active DES uses a literature-based experimental reference lookup, not the former SS-FHA curve:
 
 ```text
-P_charge(t) = 3 kW × eta(delta_t)
-R_L,FHA = (8/pi²) × 48² / 3000 = 0.622517 ohm
+data/wpt_reference/jeebklum_imura_sumpavakup_2026_table2_misalignment_measurements.csv
 ```
 
-The modeled chain is power supply → inverter → Tx coil → Rx coil → rectifier → DC-link capacitor → CCCV buck converter → battery. CCCV duty regulation is represented by a **near-matched resonant-link assumption** over the DES charging range. This does not claim constant efficiency at all output powers or model detailed converter switching/control dynamics.
-
-The generic 1/3/5-kW FHA sweeps are historical/model-development diagnostics only; they are not final-paper curves or final-DES inputs. The 50-W prototype is a **qualitative experimental validation anchor**, not an absolute 3-kW validation or a scale-up dataset.
-
-## Active strategy terminology
-
-- C1: conventional threshold charging baseline
-- C2: idle-time priority
-- C3: low-SOC priority
-- C4: **SOC-deadline risk priority** / robust charging-priority heuristic
-- C5: **rolling-horizon MILP reference** / optimization-based reference
+For each experimental lateral-offset state:
 
 ```text
-C4: S_i = 0.75 f_SOC - 0.25 f_D
-C5: lambda_soc = 2.0, lambda_task = 1.5, lambda_kpi = 2.0
+eta(delta) = mean measured X/Y efficiency
+P_charge(delta) = 3 kW × mean Pout_reference(delta) / mean Pout_reference(0)
+E_delivered = P_charge × duration
+E_input = E_delivered / eta
+E_loss = E_input − E_delivered
 ```
 
-## Final results and validation
+The reference data quantify condition variability; they do not imply the literature EV hardware is this AGV hardware. Existing SS-FHA code is supplementary analytical comparison only.
 
-- `results/final_unseen/` — one-time unseen raw/summary/statistics/final figures
-- `results/model_validation/WPT_MODEL_VALIDATION.md` — nominal-model and 50-W prototype scope
-- `results/model_validation/Figure5_WPT_Model_and_Prototype_Validation.pdf` — final Figure 5
-- `results/model_validation/final_unseen_nominal_3kw_regression.json` — non-rerun validity check
+## Controlled alignment sensitivity scenarios
 
-## Limitations
+Good, moderate, and severe alignment conditions are controlled sensitivity scenarios, **not claimed empirical AGV docking distributions**. Extreme 250–350 mm lookup states are failure-sensitivity only.
 
-- Detailed CCCV switching and control dynamics are not modeled.
-- Effective-load regulation is simplified to near-matched operation.
-- The prototype is 50 W while the DES pad is 3 kW.
-- Prototype evidence is qualitative only.
+The active representative grid separates charging adequacy and physical variability:
 
-## Archives
+1. resource-rich + good alignment
+2. near-boundary + good alignment
+3. near-boundary + moderate alignment
+4. near-boundary + severe alignment
+5. constrained + moderate alignment
 
-- Pre-rho redesign: `archive/pre-rho-redesign-20260917` at `b8ac79046609bbd08b078624d2a68976244d1b6b`
-- Pre-6-AGV Primary: `archive/pre-6agv-primary-freeze-20260919` at `71aa37dc69b1d8e388b28e452a53591ed8089623`
-- Pre-unseen final: `archive/pre-unseen-final-20260919` at `63bf5d486e061894a29d136272debe738cdb4871`
+`rho` uses mean available delivered power, without multiplying efficiency a second time:
+
+```text
+rho = task-demand power / (N_pads × E[P_charge(delta)])
+```
+
+## Pre-tuning status
+
+- New tuning seeds: `7007–7056` — **not yet used**
+- New unseen final seeds: `8007–8056` — **not yet used**
+- Historical tuning/final seed blocks: `5007–5056`, `6007–6056` — not active evidence
+- Provisional deadline reform and scenario parameters require review before tuning.
+
+See `docs/LITERATURE_WPT_CONDITION_MODEL.md` and `results/pre_tuning_literature_wpt/PRE_TUNING_AUDIT.md`.

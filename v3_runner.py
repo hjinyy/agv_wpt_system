@@ -248,8 +248,10 @@ class V3Sim(V2Sim):
                 row[socid(i, k + 1)] = 1
                 row[socid(i, k)] = -1
                 nt = preview.get(a.agv_id, next_task)
+                power = self.charging_power_kw(nt, a, mode=self.predicted_eta_mode)
                 eta = self.eta(nt, a, mode=self.predicted_eta_mode)
-                charge_soc = self.cfg['wpt_power_kw'] * eta * qh / self.cfg['battery_kwh']
+                delivered_power = power if self.cfg.get('wpt_condition_source') == 'literature_reference' else power * eta
+                charge_soc = delivered_power * qh / self.cfg['battery_kwh']
                 for p in pads: row[xid(i, p, k)] -= charge_soc
                 add(row, -task_energy_by_ik[i, k], -task_energy_by_ik[i, k])
         # E/F. Safety lower bound with emergency slack and softer operational reserve slack.
@@ -320,7 +322,8 @@ class V3Sim(V2Sim):
             )
             for k in range(K):
                 eta = self.eta(nt, a, mode=self.predicted_eta_mode)
-                loss = self.cfg['wpt_power_kw'] * (1 - eta) * qh
+                power = self.charging_power_kw(nt, a, mode=self.predicted_eta_mode)
+                loss = (power * max(0.0, 1.0 / eta - 1.0) if self.cfg.get('wpt_condition_source') == 'literature_reference' else power * (1.0 - eta)) * qh if eta > 0 else 0.0
                 # Small normalized loss term; service metrics and reserve risk dominate.
                 # Forecast-task overlap is not forbidden, but it carries a delay-risk penalty.
                 conflict_penalty = conflict_weight if forecast_busy[i, k] else 0.0
@@ -456,8 +459,8 @@ class V3Sim(V2Sim):
             for a, p in zip(chosen, avail):
                 nt = self.preview_task_map([a], t, next_task).get(a.agv_id, next_task)
                 start = max(t, p.available); wait = max(0, p.available - t); a.charge_wait_s += wait; p.wait_s += wait
-                ts = self.detour(a, start); eta = self.eta(nt, a, mode=self.realized_eta_mode); dur = min(q, max(0, next_arrival - ts))
-                actual, _, _ = self.charge_amount(a, p, ts, dur, eta, mandatory=False)
+                ts = self.detour(a, start); eta = self.eta(nt, a, mode=self.realized_eta_mode); power = self.charging_power_kw(nt, a, mode=self.realized_eta_mode, pad_id=p.pad_id); dur = min(q, max(0, next_arrival - ts))
+                actual, _, _ = self.charge_amount(a, p, ts, dur, eta, mandatory=False, charge_power_kw=power)
                 a.available = ts + actual; p.available = a.available
                 if actual <= 0: self.deferred += 1
             t = min([next_arrival] + [p.available for p in self.pads] + [a.available for a in self.agvs if a.available > t + 1e-9] or [next_arrival])
@@ -471,12 +474,13 @@ class V3Sim(V2Sim):
         p.wait_s += wait
         ts = self.detour(a, start)
         eta = self.eta(task, a, mode=self.realized_eta_mode)
+        power = self.charging_power_kw(task, a, mode=self.realized_eta_mode, pad_id=p.pad_id)
         # Official V3 conventional baseline: C1 charges from 30% threshold to 70% target.
         # Other strategies retain the original safety/mandatory charge-to-max behavior.
         target_soc = self.cfg.get('c1_target_soc', 0.70) if self.strategy == 'C1' else self.cfg['max_soc']
         target = max(0.0, (target_soc - a.soc) * self.cfg['battery_kwh'])
-        dur = target / (self.cfg['wpt_power_kw'] * eta) * 3600 if eta > 0 else 0
-        actual, _, _ = self.charge_amount(a, p, ts, dur, eta, mandatory=True)
+        dur = target / power * 3600 if power > 0 else 0
+        actual, _, _ = self.charge_amount(a, p, ts, dur, eta, mandatory=True, charge_power_kw=power)
         a.available = ts + actual
         p.available = a.available
         return a.available

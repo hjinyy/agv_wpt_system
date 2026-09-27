@@ -1,0 +1,26 @@
+{
+  "good": {
+    "mean_delta_mm": 27.5,
+    "mean_eta": 0.7526425000000001,
+    "mean_charge_power_kw": 2.781763527054108,
+    "near_zero_charge_probability": 0.0
+  },
+  "moderate": {
+    "mean_delta_mm": 70.0,
+    "mean_eta": 0.7304875,
+    "mean_charge_power_kw": 2.1288577154308617,
+    "near_zero_charge_probability": 0.0
+  },
+  "severe": {
+    "mean_delta_mm": 135.0,
+    "mean_eta": 0.6423175,
+    "mean_charge_power_kw": 1.0833667334669337,
+    "near_zero_charge_probability": 0.0
+  },
+  "extreme_failure_sensitivity": {
+    "mean_delta_mm": 299.5,
+    "mean_eta": 0.048942000000000006,
+    "mean_charge_power_kw": 0.017975951903807616,
+    "near_zero_charge_probability": 1.0
+  }
+}

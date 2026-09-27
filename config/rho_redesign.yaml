@@ -1,75 +1,117 @@
-# Active source of truth for the approved 6-AGV rho redesign.
-# Frozen physical parameters are configured separately in wpt_model.yaml.
+# Active source of truth: [3]-based experimental WPT-condition redesign.
+# Historical SS-FHA/nominal-3-kW final package is preserved on archive/pre-literature-wpt-redesign-20260927.
 seeds:
-  tuning_start: 5007
-  tuning_end: 5056
+  tuning_start: 7007
+  tuning_end: 7056
   replications: 50
-  planned_final_start: 6007
-  planned_final_end: 6056
+  planned_final_start: 8007
+  planned_final_end: 8056
+
+physical_source:
+  kind: experimental_reference_lookup
+  citation_key: Jeebklum_Imura_Sumpavakup_2026_Table2
+  table_path: data/wpt_reference/jeebklum_imura_sumpavakup_2026_table2_misalignment_measurements.csv
+  nominal_pad_power_kw: 3.0
+  charging_power_definition: "P_charge(delta) = 3 kW * Pout_reference(delta) / Pout_reference(0)"
+  efficiency_definition: "eta(delta) = mean(eta_X, eta_Y)"
+  old_ss_fha_role: supplementary_analytical_comparison_only
+
+# These are controlled sensitivity conditions, not claimed empirical docking distributions.
+alignment_conditions:
+  good:
+    description: "Controlled sensitivity: predominantly 0-50 mm lateral offset."
+    probabilities: [0.55, 0.35, 0.10, 0.00, 0.00, 0.00, 0.00, 0.00]
+  moderate:
+    description: "Controlled sensitivity: 0-100 mm centered, with 150 mm tail."
+    probabilities: [0.20, 0.35, 0.30, 0.15, 0.00, 0.00, 0.00, 0.00]
+  severe:
+    description: "Controlled sensitivity: meaningful 100-200 mm occurrence."
+    probabilities: [0.00, 0.10, 0.35, 0.30, 0.25, 0.00, 0.00, 0.00]
+  extreme_failure_sensitivity:
+    description: "250-350 mm reference states; excluded from normal-operation scenarios."
+    probabilities: [0.00, 0.00, 0.00, 0.00, 0.00, 0.34, 0.33, 0.33]
+
+prediction_model:
+  label: controlled_discrete_positioning_prediction_error
+  perfect:
+    error_steps: [0]
+    probabilities: [1.0]
+  moderate_error:
+    error_steps: [-1, 0, 1]
+    probabilities: [0.20, 0.60, 0.20]
+  note: "Predicted state is available to C4/C5; realized state is sampled after prediction and clipped to experimental lookup support."
+
+deadline_model:
+  kind: service_time_plus_urgency_slack_provisional
+  urgent_slack_s: 240.0
+  normal_slack_s: 480.0
+  rationale: "Legacy 4/8-minute allowances are retained as slack after irreducible travel plus picking/staging service, avoiding structurally infeasible urgent deadlines. Requires freeze approval before tuning."
 
 c4_general_formulation:
-  feature_names: [soc, next_task_energy, idle, deadline]
-  score: "soc*f_SOC + next_task_energy*f_E + idle*f_idle - deadline*f_D"
+  feature_names: [soc, next_task_energy, idle, charging_power_quality, deadline]
+  score: "soc*f_SOC + next_task_energy*f_E + idle*f_idle + charging_power_quality*f_P - deadline*f_D"
   constraints:
     nonnegative_weights: true
     weight_sum: 1.0
-    eta_score_feature: false
+    predicted_condition_only: true
   coarse_simplex_step: 0.25
   local_simplex_step: 0.05
 
 c5_revalidation:
-  reference_scales: [2.0, 1.5, 1.5]
-  # OAT around the old scale: reference plus six changed-scale candidates.
+  reference_scales: [2.0, 1.5, 2.0]
   oat_values:
     lambda_soc: [1.5, 2.0, 2.5]
     lambda_task: [1.0, 1.5, 2.0]
-    lambda_kpi: [1.0, 1.5, 2.0]
+    lambda_kpi: [1.5, 2.0, 2.5]
   horizon_s: 900.0
   slot_s: 60.0
+  predicted_condition_only: true
 
 scenarios:
-  base:
-    role: non_binding_reference
+  resource_rich_good:
+    role: representative_resource_rich
+    physical_condition: good
+    prediction_case: perfect
     n_agvs: 5
     n_pads: 2
     task_arrival_rate_per_h: 75
     wpt_power_kw: 3
     distances_m: [30, 30, 30, 30, 30]
-    urgent_ratio: 0.0
-  primary:
-    role: primary_selected_6agv
+    urgent_ratio: 0.20
+  near_boundary_good:
+    role: representative_near_boundary
+    physical_condition: good
+    prediction_case: perfect
     n_agvs: 6
     n_pads: 1
     task_arrival_rate_per_h: 90
     wpt_power_kw: 3
     distances_m: [40, 50, 60, 70, 80]
     urgent_ratio: 0.20
-  stress_non_binding:
-    role: stress
-    n_agvs: 5
-    n_pads: 2
-    task_arrival_rate_per_h: 75
-    wpt_power_kw: 3
-    distances_m: [30, 30, 30, 30, 30]
-    urgent_ratio: 0.20
-  stress_near_transition:
-    role: stress
-    n_agvs: 7
+  near_boundary_moderate:
+    role: representative_near_boundary
+    physical_condition: moderate
+    prediction_case: moderate_error
+    n_agvs: 6
     n_pads: 1
-    task_arrival_rate_per_h: 70
+    task_arrival_rate_per_h: 90
     wpt_power_kw: 3
-    distances_m: [45, 55, 65, 75, 85]
+    distances_m: [40, 50, 60, 70, 80]
     urgent_ratio: 0.20
-  stress_transition:
-    role: stress
-    n_agvs: 7
+  near_boundary_severe:
+    role: representative_near_boundary
+    physical_condition: severe
+    prediction_case: moderate_error
+    n_agvs: 6
     n_pads: 1
-    task_arrival_rate_per_h: 80
+    task_arrival_rate_per_h: 90
     wpt_power_kw: 3
-    distances_m: [45, 55, 65, 75, 85]
+    distances_m: [40, 50, 60, 70, 80]
     urgent_ratio: 0.20
-  stress_strongly_constrained:
-    role: stress
+  constrained_moderate:
+    role: representative_constrained
+    physical_condition: moderate
+    prediction_case: moderate_error
     n_agvs: 8
     n_pads: 1
     task_arrival_rate_per_h: 105
@@ -77,4 +119,4 @@ scenarios:
     distances_m: [55, 65, 75, 85, 95]
     urgent_ratio: 0.20
 
-tuning_scenarios: [stress_non_binding, stress_near_transition, stress_transition, primary, stress_strongly_constrained]
+tuning_scenarios: [resource_rich_good, near_boundary_good, near_boundary_moderate, near_boundary_severe, constrained_moderate]

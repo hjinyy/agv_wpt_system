@@ -40,11 +40,13 @@ def _weight_id(weights: dict[str, float]) -> str:
 def simplex_grid(step: float) -> list[dict[str, float]]:
     units = round(1.0 / step)
     candidates: list[dict[str, float]] = []
-    for soc in range(units + 1):
-        for energy in range(units - soc + 1):
-            for idle in range(units - soc - energy + 1):
-                deadline = units - soc - energy - idle
-                candidates.append(dict(zip(FEATURES, (soc * step, energy * step, idle * step, deadline * step))))
+    def compose(remaining: int, index: int, values: list[int]) -> None:
+        if index == len(FEATURES) - 1:
+            candidates.append(dict(zip(FEATURES, [*[(value * step) for value in values], remaining * step])))
+            return
+        for value in range(remaining + 1):
+            compose(remaining - value, index + 1, [*values, value])
+    compose(units, 0, [])
     return candidates
 
 

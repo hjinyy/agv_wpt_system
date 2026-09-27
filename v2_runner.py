@@ -15,7 +15,7 @@ STRATEGIES=['C1','C2','C3','C4']
 
 @dataclass
 class V2Task:
-    task_id:int; arrival:float; picking_point:int; distance_m:float; task_type:str; deadline:float; eta_state:int
+    task_id:int; arrival:float; picking_point:int; distance_m:float; task_type:str; deadline:float; eta_state:int; realized_eta_state:int|None=None
 
 @dataclass
 class V2AGV:
@@ -60,9 +60,22 @@ def generate_common(cfg,seed,challenge=False,distances=None,urgent_ratio=0.2):
         t += float(rng.exponential(1/lam))
         if t>=op: break
         pp=int(rng.choice(np.arange(1,cfg['n_picking_points']+1),p=probs)); typ='urgent' if rng.random()<urgent_ratio else 'normal'
-        deadline=t+(4*60 if typ=='urgent' else 8*60)
-        st=int(rng.choice(len(ep),p=ep))
-        tasks.append(V2Task(tid,t,pp,float(distances[pp]),typ,deadline,st)); tid+=1
+        minimum_service = task_time(cfg, float(distances[pp]))
+        deadline_model = cfg.get('deadline_model')
+        if deadline_model and deadline_model.get('kind') == 'service_time_plus_urgency_slack_provisional':
+            slack = float(deadline_model['urgent_slack_s'] if typ == 'urgent' else deadline_model['normal_slack_s'])
+            deadline = t + minimum_service + slack
+        else:
+            deadline=t+(4*60 if typ=='urgent' else 8*60)
+        if cfg.get('wpt_condition_source') == 'literature_reference':
+            ep=np.array(cfg['alignment_probabilities'],float); ep=ep/ep.sum()
+            st=int(rng.choice(len(ep),p=ep))
+            error_steps=np.array(cfg.get('prediction_error_steps',[0]),dtype=int)
+            error_prob=np.array(cfg.get('prediction_error_probabilities',[1.0]),float); error_prob=error_prob/error_prob.sum()
+            realized=int(np.clip(st + int(rng.choice(error_steps,p=error_prob)), 0, len(ep)-1))
+        else:
+            st=int(rng.choice(len(ep),p=ep)); realized=st
+        tasks.append(V2Task(tid,t,pp,float(distances[pp]),typ,deadline,st,realized)); tid+=1
     return tasks,init
 
 class V2Sim:
@@ -76,11 +89,18 @@ class V2Sim:
         self.pads=[V2Pad(i+1) for i in range(self.cfg['n_pads'])]
         self.task_rows=[]; self.feature_rows=[]; self.decision_rows=[]; self.contention_events=0; self.diff_decisions=0; self.deferred=0; self.max_queue=0
         self.weights={k:v/sum(self.cfg['weights'].values()) for k,v in self.cfg['weights'].items()}
-    def eta(self,task,agv,mode=None):
+    def wpt_condition(self, task, agv, mode=None, pad_id=None):
         mode = mode or self.realized_eta_mode
-        if mode == 'fixed': return self.cfg['eta_base']
-        # candidate-specific deterministic offset using task state + AGV ID, known before scheduling.
-        vals=eta_values(self.cfg); return float(vals[(task.eta_state+agv.agv_id-1)%len(vals)])
+        if self.cfg.get('wpt_condition_source') == 'literature_reference':
+            from simulation.literature_wpt import condition_at_index
+            index = task.eta_state if mode == 'predicted' else (task.realized_eta_state if task.realized_eta_state is not None else task.eta_state)
+            return condition_at_index(index, float(self.cfg.get('minimum_usable_charging_power_kw', 0.0)))
+        eta = self.cfg['eta_base'] if mode == 'fixed' else float(eta_values(self.cfg)[(task.eta_state+agv.agv_id-1)%len(eta_values(self.cfg))])
+        return type('LegacyCondition', (), {'eta': eta, 'charge_power_kw': float(self.cfg['wpt_power_kw']), 'delta_mm': np.nan, 'normalized_power': 1.0, 'usable': eta > 0.0})()
+    def eta(self,task,agv,mode=None):
+        return float(self.wpt_condition(task, agv, mode).eta)
+    def charging_power_kw(self, task, agv, mode=None, pad_id=None):
+        return float(self.wpt_condition(task, agv, mode, pad_id).charge_power_kw)
     def consume(self,a,tr,aux,t):
         a.traction+=tr; a.aux+=aux; a.soc -= (tr+aux)/self.cfg['battery_kwh']
         if a.soc<0: a.stops+=1; a.soc=0.0
@@ -88,10 +108,18 @@ class V2Sim:
     def detour(self,a,t):
         dist=2*self.cfg['zone_pad_distance_m']; dur=dist/self.cfg['agv_speed_mps']; tr,aux=move_energy(self.cfg,dist,dur)
         a.detour_m+=dist; self.consume(a,tr,aux,t+dur); return t+dur
-    def charge_amount(self,a,p,start,dur,eta,mandatory):
-        target=(self.cfg['max_soc']-a.soc)*self.cfg['battery_kwh']; delivered=min(target,self.cfg['wpt_power_kw']*eta*dur/3600)
-        actual=delivered/(self.cfg['wpt_power_kw']*eta)*3600 if eta>0 and delivered>0 else 0
-        inp=self.cfg['wpt_power_kw']*actual/3600; a.soc=min(self.cfg['max_soc'],a.soc+delivered/self.cfg['battery_kwh'])
+    def charge_amount(self,a,p,start,dur,eta,mandatory,charge_power_kw=None):
+        if self.cfg.get('wpt_condition_source') == 'literature_reference':
+            power = float(self.cfg['wpt_power_kw'] if charge_power_kw is None else charge_power_kw)
+            target=(self.cfg['max_soc']-a.soc)*self.cfg['battery_kwh']; delivered=min(target,power*dur/3600)
+            actual=delivered/power*3600 if power>0 and delivered>0 else 0
+            inp=delivered/eta if eta>0 and delivered>0 else 0
+        else:
+            power = float(self.cfg['wpt_power_kw'])
+            target=(self.cfg['max_soc']-a.soc)*self.cfg['battery_kwh']; delivered=min(target,power*eta*dur/3600)
+            actual=delivered/(power*eta)*3600 if eta>0 and delivered>0 else 0
+            inp=power*actual/3600
+        a.soc=min(self.cfg['max_soc'],a.soc+delivered/self.cfg['battery_kwh'])
         a.wpt_input+=inp; a.delivered+=delivered; a.wpt_loss+=inp-delivered; a.charge_s+=actual; p.busy_s+=actual; p.sessions+=1; p.input+=inp; p.delivered+=delivered
         if mandatory: a.mand_s+=actual; a.mand_energy+=delivered
         else: a.opp_s+=actual; a.opp_energy+=delivered
@@ -148,9 +176,9 @@ class V2Sim:
             chosen,reason=self.choose(cands,t,next_task,len(avail))
             for a,p in zip(chosen,avail):
                 start=max(t,p.available); wait=max(0,p.available-t); a.charge_wait_s+=wait; p.wait_s+=wait
-                ts=self.detour(a,start); eta=self.eta(next_task,a,mode=self.realized_eta_mode); dur=min(q,max(0,next_arrival-ts))
+                ts=self.detour(a,start); eta=self.eta(next_task,a,mode=self.realized_eta_mode); power=self.charging_power_kw(next_task,a,mode=self.realized_eta_mode,pad_id=p.pad_id); dur=min(q,max(0,next_arrival-ts))
                 if a.soc<=self.cfg['critical_soc'] and reason=='critical': dur=min(q,max(0,next_arrival-ts))
-                actual,_,_=self.charge_amount(a,p,ts,dur,eta,mandatory=False)
+                actual,_,_=self.charge_amount(a,p,ts,dur,eta,mandatory=False,charge_power_kw=power)
                 a.available=ts+actual; p.available=a.available
                 if actual<=0: self.deferred+=1
             # advance to next earliest decision time, at least small progress
@@ -158,8 +186,8 @@ class V2Sim:
         return t
     def mandatory_charge(self,a,t,task):
         p=min(self.pads,key=lambda p:(p.available,p.pad_id)); start=max(t,p.available); wait=max(0,start-t); a.charge_wait_s+=wait; p.wait_s+=wait
-        ts=self.detour(a,start); eta=self.eta(task,a,mode=self.realized_eta_mode); target=(self.cfg['max_soc']-a.soc)*self.cfg['battery_kwh']; dur=target/(self.cfg['wpt_power_kw']*eta)*3600 if eta>0 else 0
-        actual,_,_=self.charge_amount(a,p,ts,dur,eta,mandatory=True); a.available=ts+actual; p.available=a.available; return a.available
+        ts=self.detour(a,start); eta=self.eta(task,a,mode=self.realized_eta_mode); power=self.charging_power_kw(task,a,mode=self.realized_eta_mode,pad_id=p.pad_id); target=(self.cfg['max_soc']-a.soc)*self.cfg['battery_kwh']; dur=target/power*3600 if power>0 else 0
+        actual,_,_=self.charge_amount(a,p,ts,dur,eta,mandatory=True,charge_power_kw=power); a.available=ts+actual; p.available=a.available; return a.available
     def run(self):
         # C1: no opportunity; C2-C4: opportunity in idle gaps before each next task arrival.
         prev=0.0
