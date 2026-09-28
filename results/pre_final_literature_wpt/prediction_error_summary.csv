@@ -1,0 +1,16 @@
+ablation,scenario,prediction_power_mae_kw,prediction_power_rmse_kw,prediction_power_bias_kw
+full,moderately_constrained_moderate,0.26665140012118277,0.5375641579803575,0.04764805718599583
+full,near_transition_good,0.0,0.0,0.0
+full,non_binding_good,0.0,0.0,0.0
+full,strongly_constrained_moderate,0.2712862522798406,0.5428402504353974,0.05092066154781473
+full,strongly_constrained_severe,0.2835485879212151,0.5170602118799301,-0.0441984519313765
+no_P,moderately_constrained_moderate,0.26665140012118277,0.5375641579803575,0.04764805718599583
+no_P,near_transition_good,0.0,0.0,0.0
+no_P,non_binding_good,0.0,0.0,0.0
+no_P,strongly_constrained_moderate,0.2712862522798406,0.5428402504353974,0.05092066154781473
+no_P,strongly_constrained_severe,0.2835485879212151,0.5170602118799301,-0.0441984519313765
+no_deadline,moderately_constrained_moderate,0.2672955854347318,0.538840627743695,0.04773600738762421
+no_deadline,near_transition_good,0.0,0.0,0.0
+no_deadline,non_binding_good,0.0,0.0,0.0
+no_deadline,strongly_constrained_moderate,0.271463606850994,0.542893132358987,0.04965966795815418
+no_deadline,strongly_constrained_severe,0.28216672842335777,0.5147889512753732,-0.04204573140598225
