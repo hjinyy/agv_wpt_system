@@ -111,14 +111,24 @@ def main() -> None:
     (OUT / "c5_revalidation_plan.json").write_text(json.dumps(plan, indent=2), encoding="utf-8")
     print("C5_PLAN", json.dumps(plan, sort_keys=True), flush=True)
     jobs = [(scenario, scales, seed) for scales in candidates for scenario in names for seed in seeds]
+    raw_path = OUT / "c5_revalidation_raw.csv"
     rows: list[dict[str, object]] = []
-    with ProcessPoolExecutor(max_workers=16) as pool:
-        futures = [pool.submit(_run_one, scenario, scales, seed) for scenario, scales, seed in jobs]
-        for complete, future in enumerate(as_completed(futures), 1):
-            rows.append(future.result())
-            if complete % 100 == 0 or complete == len(futures): print(f"C5_REVALIDATION {complete}/{len(futures)}", flush=True)
-    rows.sort(key=lambda r: (str(r["scale_id"]), str(r["scenario"]), int(r["replication"])))
-    _write(OUT / "c5_revalidation_raw.csv", rows)
+    completed: set[tuple[str, str, int]] = set()
+    if raw_path.exists():
+        rows = pd.read_csv(raw_path).to_dict(orient="records")
+        completed = {(str(row["scale_id"]), str(row["scenario"]), int(row["replication"])) for row in rows}
+    jobs = [job for job in jobs if (scale_id(job[1]), job[0], job[2]) not in completed]
+    for start in range(0, len(jobs), 100):
+        batch = jobs[start:start + 100]
+        with ProcessPoolExecutor(max_workers=4) as pool:
+            futures = [pool.submit(_run_one, scenario, scales, seed) for scenario, scales, seed in batch]
+            for future in as_completed(futures):
+                rows.append(future.result())
+        rows.sort(key=lambda r: (str(r["scale_id"]), str(r["scenario"]), int(r["replication"])))
+        _write(raw_path, rows)
+        print(f"C5_REVALIDATION {min(start + len(batch), len(jobs))}/{len(jobs)} new; checkpoint_rows={len(rows)}", flush=True)
+    if len(rows) != expected_runs:
+        raise RuntimeError(f"incomplete C5 checkpoint: {len(rows)} rows, expected {expected_runs}")
     frame = pd.DataFrame(rows)
     summary = _summary(frame); summary.to_csv(OUT / "c5_revalidation_summary.csv", index=False)
     candidates_summary = _candidate_summary(summary); candidates_summary.to_csv(OUT / "c5_refinement_candidates.csv", index=False)
