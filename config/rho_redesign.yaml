@@ -68,6 +68,8 @@ c5_revalidation:
     lambda_kpi: [1.5, 2.0, 2.5]
   horizon_s: 900.0
   slot_s: 60.0
+  time_limit_s: 0.10
+  mip_rel_gap: 0.001
   predicted_condition_only: true
 
 scenarios:

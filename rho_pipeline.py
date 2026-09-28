@@ -76,6 +76,8 @@ def configuration_for(scenario: Scenario, weights: dict[str, float], data: dict 
         "prediction_error_steps": prediction["error_steps"],
         "prediction_error_probabilities": prediction["probabilities"],
         "deadline_model": deepcopy(data["deadline_model"]),
+        "c5_time_limit_s": float(data["c5_revalidation"]["time_limit_s"]),
+        "c5_mip_rel_gap": float(data["c5_revalidation"]["mip_rel_gap"]),
         "efficiency_states": {"labels": [f"delta_{int(x)}mm" for x in table.delta_mm], "probabilities": alignment},
     })
     return configuration
