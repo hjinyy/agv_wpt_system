@@ -1,0 +1,36 @@
+{
+  "frozen_pre_final_sha": "ba0e487ff731bd4fe75f21cd4e4048764ac50374",
+  "final_execution_code_sha": "54ee172146a0ccbd1af25fe729e90d0e25e7ca67",
+  "final_seeds": [8007, 8008, 8009, 8010, 8011, 8012, 8013, 8014, 8015, 8016, 8017, 8018, 8019, 8020, 8021, 8022, 8023, 8024, 8025, 8026, 8027, 8028, 8029, 8030, 8031, 8032, 8033, 8034, 8035, 8036, 8037, 8038, 8039, 8040, 8041, 8042, 8043, 8044, 8045, 8046, 8047, 8048, 8049, 8050, 8051, 8052, 8053, 8054, 8055, 8056],
+  "final_seed_authorized_by_user": true,
+  "final_execution_count": 1,
+  "crn_design": "same seed/task realization across C1/C2/C3/C4/C5 within each scenario",
+  "expected_replication_rows": 1250,
+  "observed_replication_rows": 1250,
+  "c4_weights": {
+    "soc": 0.0,
+    "next_task_energy": 0.7,
+    "idle": 0.0,
+    "charging_power_quality": 0.0,
+    "deadline": 0.3
+  },
+  "c5_scales": {
+    "lambda_soc": 1.5,
+    "lambda_task": 1.5,
+    "lambda_kpi": 2.0
+  },
+  "physical_model": "experimentally measured reference WPT condition model; delivered power and eta separated",
+  "safety_totals": {
+    "simulation_failure": 0,
+    "low_soc_stops": 0,
+    "infeasible_count": 0
+  },
+  "c5_solver_call_totals": {
+    "calls": 166546,
+    "infeasible": 0,
+    "fallback_used": 0,
+    "time_limit_hit": 87
+  },
+  "raw_solver_calls": "raw/c5_solver_calls.csv.gz (lossless gzip)",
+  "final_results_commit_sha": null
+}
