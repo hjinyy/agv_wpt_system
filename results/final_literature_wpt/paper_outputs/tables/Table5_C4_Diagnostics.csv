@@ -1,0 +1,16 @@
+Feature,Weight,Section,Scenario,Overall $f_P$ std,Contention $f_P$ std,C3-vs-C4 selection difference [%],full,no_P,soc_only,no_deadline
+SOC,0.0,Frozen C4 weights,,,,,,,,
+Next-task energy,0.7,Frozen C4 weights,,,,,,,,
+Idle,0.0,Frozen C4 weights,,,,,,,,
+Predicted WPT power,0.0,Frozen C4 weights,,,,,,,,
+Deadline risk,0.3,Frozen C4 weights,,,,,,,,
+,,Physical-feature diagnostics,Non-binding / Good,0.0106860806631827,0.0730798706370209,7330.760386448042,,,,
+,,Physical-feature diagnostics,Near-transition / Good,0.0357649175143142,0.0745107700038304,6276.379922684403,,,,
+,,Physical-feature diagnostics,Moderate / Moderate,0.0921499865189302,0.191354851672245,6267.1277353246915,,,,
+,,Physical-feature diagnostics,Strong / Moderate,0.1098906813681881,0.2007122013989245,6541.618216447824,,,,
+,,Physical-feature diagnostics,Strong / Severe,0.0745102291861266,0.1550260855315443,6171.521348057878,,,,
+,,Tuning-only ablation,Non-binding / Good,,,,0.20049757540148594,0.20049757540148594,0.20052511622240313,0.20051334403884888
+,,Tuning-only ablation,Near-transition / Good,,,,108.44699094161693,108.44699094161693,164.56186671984904,108.16028288202419
+,,Tuning-only ablation,Moderate / Moderate,,,,361.6162578501899,361.6162578501899,437.5435238234425,402.1121798875743
+,,Tuning-only ablation,Strong / Moderate,,,,704.9201198228673,704.9201198228673,713.5429140319444,729.5499076480827
+,,Tuning-only ablation,Strong / Severe,,,,3717.729880602074,3717.729880602074,4538.865805658053,5410.411431972945

@@ -1,0 +1,7 @@
+operation,statistic,time_ms
+C4 priority evaluation,Mean,2.4061646468064692
+C4 priority evaluation,P95,5.293151421379298
+C4 priority evaluation,Max,8.189682515338063
+C5 MILP solve,Mean,7.4989650370132575
+C5 MILP solve,P95,18.987239804118826
+C5 MILP solve,Max,106.8594779353588

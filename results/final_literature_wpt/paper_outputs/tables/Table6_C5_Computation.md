@@ -1,0 +1,11 @@
+| Metric                  | Final value   |
+|:------------------------|:--------------|
+| Total MILP calls        | 166,546       |
+| Mean solve time/call    | 7.499 ms      |
+| P95 solve time/call     | 18.987 ms     |
+| Maximum solve time/call | 106.859 ms    |
+| Time-limit hits         | 87            |
+| Infeasible calls        | 0             |
+| Fallback calls          | 0             |
+| Simulation failures     | 0             |
+| Low-SOC stops           | 0             |

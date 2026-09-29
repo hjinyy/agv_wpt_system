@@ -1,0 +1,6 @@
+scenario,ablation,decisions,f_P_std_mean,f_P_std_contention_mean,selection_changed_fraction,selection_changed_fraction_contention
+non_binding_good,full,108678,0.0106860806631827,0.0730798706370209,0.0,0.0
+near_transition_good,full,11823,0.0357649175143142,0.0745107700038304,0.0,0.0
+moderately_constrained_moderate,full,10958,0.0921499865189302,0.191354851672245,0.0,0.0
+strongly_constrained_moderate,full,11357,0.1098906813681881,0.2007122013989245,0.0,0.0
+strongly_constrained_severe,full,9964,0.0745102291861266,0.1550260855315443,0.0,0.0
